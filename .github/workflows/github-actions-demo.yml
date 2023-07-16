@@ -1,0 +1,30 @@
+name: GitHub Actions Demo
+run-name: Docs Generator
+on:
+  push:
+    branches:
+      - master
+jobs:
+  Generate-Docs:
+    runs-on: ubuntu-latest
+    container:
+      image: rust
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v3
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Set git safe dir
+        run: git config --global --add safe.directory /__w/smashline-2/smashline-2
+      - name: Checkout new docs branch
+        run: git checkout -b docs
+      - name: Generate documentation
+        run: cargo doc --no-deps && cp -R ./target/doc ./docs
+      - name: Make new index.html
+        run: echo "<meta http-equiv=\"refresh\" content=\"0; url=smashline\">" > ./docs/index.html
+      - name: Push changes to docs branch
+        run: |-
+          git config user.name github-actions && git config user.email github-actions@github.com && git add . && git commit -m "docs: Push documentation" && git push origin docs --force
