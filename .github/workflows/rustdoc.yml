@@ -23,7 +23,7 @@ jobs:
       - name: Checkout new docs branch
         run: git checkout -b docs
       - name: Generate documentation
-        run: cargo doc --no-deps --workspace && cp -R ./target/doc ./docs
+        run: RUSTDOCFLAGS='--html-in-header doc-header.html' cargo doc --no-deps --workspace && cp -R ./target/doc ./docs
       - name: Make new index.html
         run: echo "<meta http-equiv=\"refresh\" content=\"0; url=smashline\">" > ./docs/index.html
       - name: Push changes to docs branch
