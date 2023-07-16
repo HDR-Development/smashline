@@ -1,0 +1,29 @@
+[workspace]
+
+[workspace.package]
+version = "1.0.0"
+authors = ["blujay <the.blu.dev@gmail.com>"]
+description = "An object script replacement engine for Super Smash Bros. Ultimate"
+edition = "2021"
+repository = "https://github.com/blu-dev/smashline-2"
+
+[package]
+name = "smashline"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[package.metadata.skyline]
+titleid = "01006A800016E000"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true
