@@ -1,4 +1,4 @@
-name: GitHub Actions Demo
+name: Rustdoc Generator
 run-name: Docs Generator
 on:
   push:
@@ -17,12 +17,13 @@ jobs:
         with:
           ref: master
           fetch-depth: 0
-      - name: Set git safe dir
-        run: git config --global --add safe.directory /__w/smashline-2/smashline-2
+          set-safe-directory: true
+      - name: Configure safe directories
+        run: export WORKING_DIR=$(pwd) && echo $WORKING_DIR && git config --global --add safe.directory $WORKING_DIR
       - name: Checkout new docs branch
         run: git checkout -b docs
       - name: Generate documentation
-        run: cargo doc --no-deps && cp -R ./target/doc ./docs
+        run: cargo doc --no-deps --workspace && cp -R ./target/doc ./docs
       - name: Make new index.html
         run: echo "<meta http-equiv=\"refresh\" content=\"0; url=smashline\">" > ./docs/index.html
       - name: Push changes to docs branch
