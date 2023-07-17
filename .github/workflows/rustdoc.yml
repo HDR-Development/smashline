@@ -12,6 +12,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Switch to nightly rust
+        run: rustup install nightly && rustup default nightly
       - name: Checkout master
         uses: actions/checkout@v3
         with:

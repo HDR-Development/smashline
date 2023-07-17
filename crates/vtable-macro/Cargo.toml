@@ -1,5 +1,5 @@
 [package]
-name = "vtables"
+name = "vtable-macro"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
@@ -9,5 +9,12 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-skyline.workspace = true
-vtable-macro.path = "../vtable-macro"
+Inflector.workspace = true
+proc-macro-crate.workspace = true
+proc-macro-error.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true
+
+[lib]
+proc-macro = true

@@ -59,3 +59,38 @@
 //!     WorkModule.off_flag(EXAMPLE_FLAG)
 //! end
 //! ```
+//!
+//! This makes performing operations on specific frames a lot easier to both read and write,
+//! since they are expressed as a set of procedural instructions instead of logic that might
+//! be operating once on every frame.
+//!
+//! ### AnimCMD Categories
+//! To further split up the logic into more maintainable components, there are four different
+//! categories of ACMD scripts:
+//! - `game` scripts
+//!   
+//!   `game` scripts operate on the core state of the object. Here you will find hitbox placements,
+//! state manipulation, occasional button checks, etc.
+//!
+//!   An integral part of the animation is also exclusively controlled in these scripts: frame
+//! pacing. Via calls to `FT_MOTION_RATE`, these scripts can change the speed of the animation and
+//! how fast the script playback is. For this reason, calls to effect and sound libraries are
+//! off-handed to the other scripts as a nice separation. The speed of those scripts are also
+//! impacted by these calls.
+//! - `effect` scripts
+//!   
+//!   `effect` scripts are purely visual, although changing them may lead to changes in how the
+//! RNG generators work since some effects generate RNG values. Sword trails, singular effects,
+//! flashes, screen backgrounds, etc. are usually all controlled by effects. They are not always
+//! in the `effect` scripts, but for animations' associated effects that is where you will find
+//! them.
+//! - `sound` scripts
+//!    
+//!   `sound` scripts make calls to the game's sound module and libraries to either play sound
+//! effects or pick a sound effect to play from a sound effect bank.
+//! - `expression` scripts
+//!
+//!   `expression` scripts are basically the catch-all for everything else. Changing how an object
+//! might display an interaction with sloped ground or how rumble is applied will happen in these
+//! scripts.
+//!
