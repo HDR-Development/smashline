@@ -1,0 +1,14 @@
+[package]
+name = "smashline"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+smash = { git = "https://github.com/blu-dev/smash-rs", optional = true }
+skyline_smash = { git = "https://github.com/blu-dev/skyline-smash", optional = true }
+
+[features]
+default = ["skyline_smash"]
+smash-rs = ["smash"]

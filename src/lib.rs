@@ -94,3 +94,13 @@
 //! might display an interaction with sloped ground or how rumble is applied will happen in these
 //! scripts.
 //!
+
+use smashline::L2CAgentBase;
+
+#[smashline_macro::acmd_script("captain", ["game_attackairhi", "game_attackairlw"])]
+fn falcon_attack_air(fighter: &mut L2CAgentBase) {}
+
+#[skyline::main(name = "smashline")]
+pub fn main() {
+    falcon_attack_air::install();
+}
