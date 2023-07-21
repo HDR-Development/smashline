@@ -10,6 +10,7 @@ mod kw {
     syn::custom_keyword!(status);
     syn::custom_keyword!(pre);
     syn::custom_keyword!(main);
+    syn::custom_keyword!(main_loop);
     syn::custom_keyword!(end);
     syn::custom_keyword!(init);
     syn::custom_keyword!(exec);
@@ -29,6 +30,7 @@ mod kw {
 struct ScriptLine {
     line_id: syn::Ident,
     arg_count: usize,
+    is_concept: bool,
 }
 
 impl ScriptLine {
@@ -37,6 +39,7 @@ impl ScriptLine {
             name.to_string();
             "pre" => ("Pre", 0),
             "main" => ("Main", 0),
+            "main_loop" => ("MainLoop", 0),
             "end" => ("End", 0),
             "exec" => ("Exec", 0),
             "exec_stop" => ("ExecStop", 0),
@@ -58,6 +61,7 @@ impl ScriptLine {
         Ok(Self {
             line_id: syn::Ident::new(line, Span::call_site()),
             arg_count: count,
+            is_concept: line == "MainLoop",
         })
     }
 }
@@ -68,6 +72,7 @@ impl Parse for ScriptLine {
             input;
             kw::pre => ("Pre", 0),
             kw::main => ("Main", 0),
+            kw::main_loop => ("MainLoop", 0),
             kw::end => ("End", 0),
             kw::init => ("Init", 0),
             kw::exec => ("Exec", 0),
@@ -90,6 +95,7 @@ impl Parse for ScriptLine {
         Ok(Self {
             line_id: syn::Ident::new(line, Span::call_site()),
             arg_count: count,
+            is_concept: line == "MainLoop",
         })
     }
 }
@@ -128,6 +134,35 @@ impl StatusAttributes {
         Ok(())
     }
 
+    pub fn original(
+        &self,
+        bare_fn: syn::TypeBareFn,
+        crate_tokens: TokenStream,
+    ) -> syn::Result<TokenStream> {
+        let Self { line, .. } = self;
+
+        let Some(line) = line.as_ref() else {
+            return Err(syn::Error::new(Span::call_site(), "no status line id found"));
+        };
+
+        let fn_name = match line.arg_count {
+            0 => quote::quote!(__basic_status_stub),
+            1 => quote::quote!(__one_arg_status_stub),
+            2 => quote::quote!(__two_arg_status_stub),
+            _ => {
+                return Err(syn::Error::new(
+                    Span::call_site(),
+                    "invalid status line id found",
+                ));
+            }
+        };
+
+        Ok(quote::quote! {
+            static ORIGINAL_FUNCTION: #crate_tokens::locks::RwLock<#bare_fn>
+                = #crate_tokens::locks::RwLock::new(#crate_tokens::api::#fn_name);
+        })
+    }
+
     pub fn installer(
         &self,
         crate_tokens: TokenStream,
@@ -159,7 +194,8 @@ impl StatusAttributes {
                 #crate_tokens::AsHash40::as_hash40(#agent),
                 #crate_tokens::IntoLuaConst::into_lua_const(#status),
                 #crate_tokens::StatusLine::#line_id as i32,
-                #name
+                #name,
+                &ORIGINAL_FUNCTION
             );
         })
     }
@@ -233,6 +269,13 @@ impl LineAttributes {
         name: &syn::Ident,
     ) -> syn::Result<TokenStream> {
         let Self { agent, line } = self;
+
+        if line.is_concept {
+            return Err(syn::Error::new(
+                name.span(),
+                "line id specified is not supported here",
+            ));
+        }
 
         let fn_name = match line.arg_count {
             0 => quote::quote!(install_basic_line_callback),
@@ -313,4 +356,30 @@ impl Parse for LineAttributes {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Self::parse_named(input).or_else(|_| Self::parse_unnamed(input))
     }
+}
+
+pub fn insert_original_function(function: &mut syn::ItemFn) -> syn::Result<()> {
+    let mut sig = function.sig.clone();
+    sig.abi = None;
+    sig.ident = syn::Ident::new("original", sig.ident.span());
+
+    let mut orig = syn::ItemFn {
+        attrs: vec![],
+        vis: syn::Visibility::Inherited,
+        sig,
+        block: Box::new(syn::Block {
+            brace_token: syn::token::Brace(Span::call_site()),
+            stmts: vec![],
+        }),
+    };
+
+    let arg_names = crate::target_function::extract_args(&orig.sig)?;
+
+    orig.block.stmts.push(syn::parse_quote! {
+        return (ORIGINAL_FUNCTION.read())(#(#arg_names),*);
+    });
+
+    function.block.stmts.insert(0, syn::parse_quote! { #orig });
+
+    Ok(())
 }

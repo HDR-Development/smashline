@@ -6,8 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+locks.path = "../locks"
 smash = { git = "https://github.com/blu-dev/smash-rs", optional = true }
 smashline-macro.path = "../smashline-macro"
+skyline.workspace = true
 skyline_smash = { git = "https://github.com/blu-dev/skyline-smash", optional = true }
 
 [features]

@@ -15,14 +15,10 @@ use std::{
 };
 
 extern "C" {
-    fn nnosInitializeMutex(mutex: &mut RawMutex, recursive: bool, _: i32);
     fn nnosFinalizeMutex(mutex: &mut RawMutex);
     fn nnosLockMutex(mutex: &RawMutex);
     fn nnosUnlockMutex(mutex: &RawMutex);
     fn nnosTryLockMutex(mutex: &RawMutex) -> bool;
-
-    #[link_name = "_ZN2nn2os26InitializeReaderWriterLockEPNS0_20ReaderWriterLockTypeE"]
-    fn nnosInitializeReaderWriterLock(lock: &mut RawRwLock);
 
     #[link_name = "_ZN2nn2os24FinalizeReaderWriterLockEPNS0_20ReaderWriterLockTypeE"]
     fn nnosFinalizeReaderWriterLock(lock: &mut RawRwLock);
@@ -47,15 +43,25 @@ extern "C" {
 }
 
 #[repr(C)]
-struct RawMutex([u8; 0x20]);
+struct RawMutex {
+    is_initialized: bool,
+    recursive: bool,
+    unused_: i32,
+    recursion_count: u32,
+    padding_: u32,
+    internal: [u8; 0x10],
+}
 
 impl RawMutex {
-    fn new() -> Self {
-        let mut this = Self([0u8; 0x20]);
-        unsafe {
-            nnosInitializeMutex(&mut this, false, 0);
+    const fn new() -> Self {
+        Self {
+            is_initialized: true,
+            recursive: false,
+            unused_: 0,
+            recursion_count: 0,
+            padding_: 0,
+            internal: [0u8; 0x10],
         }
-        this
     }
 
     fn lock(&self) {
@@ -84,15 +90,17 @@ impl Drop for RawMutex {
 }
 
 #[repr(C)]
-struct RawRwLock([u8; 0x30]);
+struct RawRwLock {
+    is_initialized: bool,
+    internal: [u32; 11],
+}
 
 impl RawRwLock {
-    fn new() -> Self {
-        let mut this = Self([0u8; 0x30]);
-        unsafe {
-            nnosInitializeReaderWriterLock(&mut this);
+    const fn new() -> Self {
+        Self {
+            is_initialized: true,
+            internal: [0u32; 11],
         }
-        this
     }
 
     fn read(&self) {
@@ -143,6 +151,7 @@ impl Drop for RawRwLock {
 /// reference is dropped.
 ///
 /// If you are looking to give multiple threads read-only access, see [`RwLock`] instead.
+#[repr(C)]
 pub struct Mutex<T> {
     raw: RawMutex,
     data: UnsafeCell<T>,
@@ -153,7 +162,7 @@ unsafe impl<T> Sync for Mutex<T> {}
 
 impl<T> Mutex<T> {
     /// Constructs a new mutex with the provided data
-    pub fn new(data: T) -> Self {
+    pub const fn new(data: T) -> Self {
         Self {
             raw: RawMutex::new(),
             data: UnsafeCell::new(data),
@@ -217,6 +226,7 @@ impl<'a, T> Drop for MutexGuard<'a, T> {
 /// Using this will prevent multiple threads from mutably accessing this data at the same time.
 /// You can acquire a read-only reference to the data via the `read` method, a mutable reference
 /// to the data via the `wwrite` method, and the lock is released when the reference is dropped.
+#[repr(C)]
 pub struct RwLock<T> {
     raw: RawRwLock,
     data: UnsafeCell<T>,
@@ -227,7 +237,7 @@ unsafe impl<T> Sync for RwLock<T> {}
 
 impl<T> RwLock<T> {
     /// Constructs a new reader-writer lock with the provided data
-    pub fn new(data: T) -> Self {
+    pub const fn new(data: T) -> Self {
         Self {
             raw: RawRwLock::new(),
             data: UnsafeCell::new(data),

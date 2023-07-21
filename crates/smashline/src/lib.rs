@@ -1,4 +1,6 @@
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::str::Utf8Error;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub use smashline_macro::*;
 
@@ -15,6 +17,8 @@ pub use smash::{
     lua2cpp::{L2CAgentBase, L2CFighterBase},
     phx::Hash40,
 };
+
+pub use locks;
 
 #[repr(C)]
 pub enum Priority {
@@ -39,7 +43,7 @@ pub enum StatusLine {
     Init,
     Exec,
     ExecStop,
-    ExecPost,
+    Post,
     Exit,
     MapCorrection,
     FixCamera,
@@ -49,6 +53,8 @@ pub enum StatusLine {
     OnChangeLr,
     LeaveStop,
     NotifyEventGimmick,
+
+    MainLoop = -1,
 }
 
 #[derive(Debug)]
@@ -172,6 +178,68 @@ impl IntoLuaConst for smash::lib::LuaConst {
     }
 }
 
+macro_rules! decl_imports {
+    ($($V:vis fn $name:ident($($arg:ident: $T:ty),*) $(-> $Ret:ty)?;)*) => {
+        $(
+            $V fn $name($($arg: $T),*) $(-> $Ret)? {
+                static CACHED_ADDR: AtomicUsize = AtomicUsize::new(0);
+                if CACHED_ADDR.load(Ordering::Acquire) == 0 {
+                    let mut value = 0usize;
+                    let res = unsafe { skyline::nn::ro::LookupSymbol(&mut value, concat!(stringify!($name), "\0").as_ptr() as _) };
+                    if res != 0 {
+                        panic!("Failed to lookup '{}': {:#x}", stringify!($name), res);
+                    } else if value == 0 {
+                        panic!("Could not find '{}', please install the smashline plugin!", stringify!($name));
+                    }
+                    CACHED_ADDR.store(value, Ordering::Release);
+                }
+
+                let addr = CACHED_ADDR.load(Ordering::Acquire);
+                let callable: extern "C" fn($($T),*) $(-> $Ret)? = unsafe {
+                    std::mem::transmute(addr)
+                };
+
+                callable($($arg),*)
+            }
+        )*
+    }
+}
+
+decl_imports! {
+    fn smashline_install_acmd_script(
+        agent: Hash40,
+        script: Hash40,
+        category: Acmd,
+        priority: Priority,
+        function: extern "C" fn(&mut L2CAgentBase, &mut Variadic)
+    );
+
+    fn smashline_install_status_script(
+        agent: Hash40,
+        status: LuaConst,
+        line: i32,
+        function: *const (),
+        original: &'static locks::RwLock<*const ()>
+    );
+
+    fn smashline_install_line_callback(
+        agent: Option<NonZeroU64>,
+        line: i32,
+        callback: *const ()
+    );
+
+    fn smashline_get_target_function(
+        name: StringFFI,
+        offset: usize
+    ) -> Option<NonZeroUsize>;
+
+    fn smashline_install_symbol_hook(
+        symbol: StringFFI,
+        replacement: *const (),
+        original: &'static locks::RwLock<*const ()>
+    );
+}
+
 pub mod api {
     use super::*;
     use std::ops::DerefMut;
@@ -183,6 +251,7 @@ pub mod api {
         priority: Priority,
         function: extern "C" fn(&mut L2CAgentBase, &mut Variadic),
     ) {
+        smashline_install_acmd_script(agent, script, category, priority, function);
     }
 
     pub fn install_basic_status_script<T>(
@@ -190,9 +259,19 @@ pub mod api {
         status: LuaConst,
         line: i32,
         function: extern "C" fn(&mut T) -> L2CValue,
+        original: &'static locks::RwLock<extern "C" fn(&mut T) -> L2CValue>,
     ) where
         T: DerefMut<Target = L2CFighterBase>,
     {
+        unsafe {
+            smashline_install_status_script(
+                agent,
+                status,
+                line,
+                std::mem::transmute(function),
+                std::mem::transmute(original),
+            );
+        }
     }
 
     pub fn install_one_arg_status_script<T>(
@@ -200,9 +279,19 @@ pub mod api {
         status: LuaConst,
         line: i32,
         function: extern "C" fn(&mut T, L2CValue) -> L2CValue,
+        original: &'static locks::RwLock<extern "C" fn(&mut T, L2CValue) -> L2CValue>,
     ) where
         T: DerefMut<Target = L2CFighterBase>,
     {
+        unsafe {
+            smashline_install_status_script(
+                agent,
+                status,
+                line,
+                std::mem::transmute(function),
+                std::mem::transmute(original),
+            );
+        }
     }
 
     pub fn install_two_arg_status_script<T>(
@@ -210,9 +299,19 @@ pub mod api {
         status: LuaConst,
         line: i32,
         function: extern "C" fn(&mut T, L2CValue, L2CValue) -> L2CValue,
+        original: &'static locks::RwLock<extern "C" fn(&mut T, L2CValue, L2CValue) -> L2CValue>,
     ) where
         T: DerefMut<Target = L2CFighterBase>,
     {
+        unsafe {
+            smashline_install_status_script(
+                agent,
+                status,
+                line,
+                std::mem::transmute(function),
+                std::mem::transmute(original),
+            );
+        }
     }
 
     pub fn install_basic_line_callback<T>(
@@ -222,6 +321,11 @@ pub mod api {
     ) where
         T: DerefMut<Target = L2CFighterBase>,
     {
+        smashline_install_line_callback(
+            agent.and_then(|x| NonZeroU64::new(x.hash)),
+            line,
+            function as *const (),
+        );
     }
 
     pub fn install_one_arg_line_callback<T>(
@@ -231,6 +335,11 @@ pub mod api {
     ) where
         T: DerefMut<Target = L2CFighterBase>,
     {
+        smashline_install_line_callback(
+            agent.and_then(|x| NonZeroU64::new(x.hash)),
+            line,
+            function as *const (),
+        );
     }
 
     pub fn install_two_arg_line_callback<T>(
@@ -240,5 +349,43 @@ pub mod api {
     ) where
         T: DerefMut<Target = L2CFighterBase>,
     {
+        smashline_install_line_callback(
+            agent.and_then(|x| NonZeroU64::new(x.hash)),
+            line,
+            function as *const (),
+        );
+    }
+
+    pub fn get_target_function(module_name: impl Into<String>, offset: usize) -> Option<usize> {
+        smashline_get_target_function(StringFFI::from_str(module_name), offset).map(|x| x.get())
+    }
+
+    pub fn install_symbol_hook<T>(
+        module_name: impl Into<String>,
+        replacement: *const (),
+        original: &'static locks::RwLock<*const ()>,
+    ) {
+        unsafe {
+            smashline_install_symbol_hook(
+                StringFFI::from_str(module_name),
+                std::mem::transmute(replacement),
+                std::mem::transmute(original),
+            );
+        }
+    }
+
+    #[doc(hidden)]
+    pub extern "C" fn __basic_status_stub<T>(_: &mut T) -> L2CValue {
+        panic!("basic status stub called")
+    }
+
+    #[doc(hidden)]
+    pub extern "C" fn __one_arg_status_stub<T>(_: &mut T, _: L2CValue) -> L2CValue {
+        panic!("one arg stub called")
+    }
+
+    #[doc(hidden)]
+    pub extern "C" fn __two_arg_status_stub<T>(_: &mut T, _: L2CValue, _: L2CValue) -> L2CValue {
+        panic!("two arg stub called")
     }
 }

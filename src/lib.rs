@@ -98,9 +98,12 @@
 use smash::{lib::lua_const::*, lua2cpp::L2CFighterCommon};
 use smashline::{L2CAgentBase, L2CValue};
 
-#[smashline::status("captain", FIGHTER_STATUS_KIND_SPECIAL_N)]
-fn falcon_special_n_pre(fighter: &mut L2CFighterCommon) -> L2CValue {
-    L2CValue::new_int(0)
+#[smashline::in_target("captain", 0x123456)]
+fn falcon_special_n_main_loop(fighter: &mut L2CFighterCommon) -> L2CValue;
+
+#[smashline::status("captain", FIGHTER_STATUS_KIND_SPECIAL_N, main_loop)]
+fn falcon_special_n(fighter: &mut L2CFighterCommon) -> L2CValue {
+    original(fighter)
 }
 
 #[smashline::acmd("captain", ["game_attackairhi", "game_attackairlw"])]
@@ -118,5 +121,5 @@ fn check_attack_callback(fighter: &mut L2CFighterCommon, arg1: L2CValue, arg2: L
 #[skyline::main(name = "smashline")]
 pub fn main() {
     falcon_attack_air::install();
-    falcon_special_n_pre::install();
+    falcon_special_n::install();
 }
