@@ -1,225 +1,46 @@
+use acmd::AcmdAttributes;
 use proc_macro::TokenStream as TS;
-use proc_macro2::{Group, Punct, Spacing, TokenStream, TokenTree};
+use proc_macro2::{Group, Punct, Spacing, Span, TokenStream, TokenTree};
+use proc_macro_crate::FoundCrate;
 use proc_macro_error::{abort, proc_macro_error};
 use quote::ToTokens;
-use syn::{
-    parse::{Parse, ParseStream},
-    punctuated::Punctuated,
-    spanned::Spanned,
-};
+use status::StatusAttributes;
+use syn::spanned::Spanned;
+
+mod acmd;
+mod status;
 
 macro_rules! match_kw {
-    ($input:ident;$($kw:path $([$token:tt])? => {$($t:tt)*}),*) => {
+    ($input:ident;$($kw:path $([$token:tt])? => $e:expr),*; _ => $e2:expr) => {{
         $(
             if $input.peek($kw) {
                 let _: $kw = $input.parse()?;
-                let _: syn::Token![=] = $input.parse()?;
-                $($t)*
+                $(let _: syn::Token![$token] = $input.parse()?;)?
+                $e
             } else
         )*
         {
-            Err(syn::Error::new($input.span(), concat!("Unexpected token, expected any of: [" $(, stringify!($kw))*, "]")))
+            $e2
         }
-    }
+    }}
 }
 
-mod kw {
-    syn::custom_keyword!(agent);
-    syn::custom_keyword!(script);
-    syn::custom_keyword!(scripts);
-    syn::custom_keyword!(category);
-    syn::custom_keyword!(low_priority);
-    syn::custom_keyword!(high_priority);
-
-    syn::custom_keyword!(pre);
-    syn::custom_keyword!(main);
-    syn::custom_keyword!(end);
-    syn::custom_keyword!(init);
-    syn::custom_keyword!(exec);
-    syn::custom_keyword!(exec_stop);
-    syn::custom_keyword!(exec_post);
-    syn::custom_keyword!(exit);
-    syn::custom_keyword!(map_correction);
-    syn::custom_keyword!(fix_camera);
-    syn::custom_keyword!(fix_pos_slow);
-    syn::custom_keyword!(check_damage);
-    syn::custom_keyword!(check_attack);
-    syn::custom_keyword!(on_change_lr);
-    syn::custom_keyword!(leave_stop);
-    syn::custom_keyword!(notify_event_gimmick);
-}
-
-enum AcmdAttribute {
-    Agent(syn::Expr),
-    Script(syn::Expr),
-    Scripts(Vec<syn::Expr>),
-    Category(syn::Expr),
-    LowPriority,
-    HighPriority,
-}
-
-impl Parse for AcmdAttribute {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        match_kw! {
-            input;
-            kw::agent [=] => { input.parse().map(Self::Agent) },
-            kw::script [=] => { input.parse().map(Self::Script) },
-            kw::scripts [=] => {
-                let bracketed;
-                syn::bracketed!(bracketed in input);
-                Punctuated::<_, syn::token::Comma>::parse_terminated(&bracketed).map(|p| Self::Scripts(p.into_iter().collect()))
-            },
-            kw::category [=] => { input.parse().map(Self::Category) },
-            kw::low_priority => { Ok(Self::LowPriority) },
-            kw::high_priority => { Ok(Self::HighPriority) }
+macro_rules! match_suffix {
+    ($str:expr; $($suffix:expr => $e:expr),*; _ => $e2:expr) => {{
+        let __match_str = $str;
+        $(
+            if __match_str.ends_with($suffix) {
+                $e
+            } else
+        )*
+        {
+            $e2
         }
-    }
+    }}
 }
 
-struct AcmdAttributes {
-    agent: syn::Expr,
-    scripts: Vec<syn::Expr>,
-    category: syn::Expr,
-    priority: syn::Expr,
-}
-
-fn name_to_cat(name: &str) -> Option<syn::Expr> {
-    if name.starts_with("game_") {
-        Some(syn::parse_quote!(::smashline::Acmd::Game))
-    } else if name.starts_with("effect_") {
-        Some(syn::parse_quote!(::smashline::Acmd::Effect))
-    } else if name.starts_with("sound_") {
-        Some(syn::parse_quote!(::smashline::Acmd::Sound))
-    } else if name.starts_with("expression_") {
-        Some(syn::parse_quote!(::smashline::Acmd::Expression))
-    } else {
-        None
-    }
-}
-
-impl AcmdAttributes {
-    fn parse_named(input: ParseStream) -> syn::Result<Self> {
-        let attrs = Punctuated::<AcmdAttribute, syn::token::Comma>::parse_terminated(input)?;
-
-        let mut agent = None;
-        let mut scripts = vec![];
-        let mut category = None;
-        let mut priority = None;
-        for attr in attrs {
-            match attr {
-                AcmdAttribute::Agent(expr) => agent = Some(expr),
-                AcmdAttribute::Script(expr) => scripts.push(expr),
-                AcmdAttribute::Scripts(exprs) => scripts.extend(exprs),
-                AcmdAttribute::Category(expr) => category = Some(expr),
-                AcmdAttribute::LowPriority => {
-                    priority = Some(syn::parse_quote!(::smashline::Priority::Low))
-                }
-                AcmdAttribute::HighPriority => {
-                    priority = Some(syn::parse_quote!(::smashline::Priority::High))
-                }
-            }
-        }
-
-        let Some(agent) = agent else {
-            return Err(syn::Error::new(input.span(), "agent must be provided"));
-        };
-
-        if scripts.is_empty() {
-            return Err(syn::Error::new(
-                input.span(),
-                "at least 1 script must be provided",
-            ));
-        }
-
-        let priority =
-            priority.unwrap_or_else(|| syn::parse_quote!(::smashline::Priority::Default));
-        let category = if let Some(category) = category {
-            category
-        } else {
-            for script in scripts.iter() {
-                match script {
-                    syn::Expr::Lit(syn::ExprLit {
-                        lit: syn::Lit::Str(lit_str),
-                        ..
-                    }) => {
-                        if let Some(cat) = name_to_cat(lit_str.value().as_str()) {
-                            category = Some(cat);
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            if let Some(category) = category {
-                category
-            } else {
-                return Err(syn::Error::new(
-                    input.span(),
-                    "could not infer acmd category from scripts, specify it manually",
-                ));
-            }
-        };
-
-        Ok(Self {
-            agent,
-            scripts,
-            category,
-            priority,
-        })
-    }
-
-    fn parse_unnamed(input: ParseStream) -> syn::Result<Self> {
-        let agent: syn::Expr = input.parse()?;
-        let _: syn::Token![,] = input.parse()?;
-        let scripts: Vec<_> = if input.peek(syn::token::Bracket) {
-            let bracketed;
-            syn::bracketed!(bracketed in input);
-
-            let scripts = Punctuated::<syn::Expr, syn::token::Comma>::parse_terminated(&bracketed)?;
-            scripts.into_iter().collect()
-        } else {
-            let script: syn::Expr = input.parse()?;
-            vec![script]
-        };
-
-        let mut category = None;
-        for script in scripts.iter() {
-            match script {
-                syn::Expr::Lit(syn::ExprLit {
-                    lit: syn::Lit::Str(lit_str),
-                    ..
-                }) => {
-                    if let Some(cat) = name_to_cat(lit_str.value().as_str()) {
-                        category = Some(cat);
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let Some(category) = category else {
-            return Err(syn::Error::new(
-                input.span(),
-                "could not infer acmd category from scripts, specify it manually",
-            ));
-        };
-
-        Ok(Self {
-            agent,
-            scripts,
-            category,
-            priority: syn::parse_quote!(::smashline::Priority::Default),
-        })
-    }
-}
-
-impl Parse for AcmdAttributes {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Self::parse_named(input).or_else(|_| Self::parse_unnamed(input))
-    }
-}
+pub(crate) use match_kw;
+pub(crate) use match_suffix;
 
 fn returns_to_breaks(stream: TokenStream) -> TokenStream {
     let mut tokens = vec![];
@@ -264,6 +85,19 @@ fn map_function_block(func: &mut syn::ItemFn) -> syn::Result<()> {
     Ok(())
 }
 
+fn smashline_crate_tokens() -> TokenStream {
+    match proc_macro_crate::crate_name("smashline") {
+        Ok(FoundCrate::Itself) => quote::quote!(crate),
+        Ok(FoundCrate::Name(name)) => {
+            let ident = syn::Ident::new(name.as_str(), Span::call_site());
+            quote::quote!(::#ident)
+        }
+        Err(e) => {
+            abort!(Span::call_site(), "{:?}", e);
+        }
+    }
+}
+
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn acmd_script(attr: TS, input: TS) -> TS {
@@ -271,48 +105,103 @@ pub fn acmd_script(attr: TS, input: TS) -> TS {
 
     let mut function = syn::parse_macro_input!(input as syn::ItemFn);
 
-    function.sig.abi = Some(syn::Abi {
-        extern_token: syn::token::Extern(function.sig.span()),
-        name: Some(syn::LitStr::new("C", function.sig.span())),
-    });
     function
         .sig
         .inputs
         .push(syn::parse_quote!(_variadic: &mut ::smashline::Variadic));
 
-    if let Err(e) = map_function_block(&mut function) {
-        abort!(e);
-    }
-
     let vis = &function.vis;
     let ident = &function.sig.ident;
 
-    let installs = attributes.scripts.iter().map(|script| {
-        let agent = &attributes.agent;
-        let category = &attributes.category;
-        let priority = &attributes.priority;
-        quote::quote! {
-            ::smashline::api::install_acmd_script(
-                ::smashline::AsHash40::as_hash40(#agent),
-                ::smashline::AsHash40::as_hash40(#script),
-                #category,
-                #priority,
-                #ident
-            );
-        }
-    });
+    let smashline = smashline_crate_tokens();
+
+    let install = attributes.installer(ident, smashline.clone());
 
     let tokens = quote::quote! {
         #vis mod #ident {
             use super::*;
-            pub fn install() {
-                #(#installs)*
-            }
+            #install
 
-            #[no_mangle]
+            #[#smashline::unwindable]
             #function
         }
     };
 
     tokens.into()
+}
+
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn status_script(attrs: TS, input: TS) -> TS {
+    let mut attrs = syn::parse_macro_input!(attrs as StatusAttributes);
+    let mut function = syn::parse_macro_input!(input as syn::ItemFn);
+
+    if let Err(e) = attrs.try_set_line(&function.sig.ident) {
+        abort!(e);
+    }
+
+    function.sig.abi = Some(syn::Abi {
+        extern_token: syn::token::Extern(function.sig.span()),
+        name: Some(syn::LitStr::new("C", function.sig.span())),
+    });
+
+    let smashline = smashline_crate_tokens();
+
+    let vis = &function.vis;
+    let ident = &function.sig.ident;
+    let installer = match attrs.installer(smashline, ident) {
+        Ok(installer) => installer,
+        Err(e) => abort!(e),
+    };
+
+    quote::quote! {
+        #vis mod #ident {
+            use super::*;
+
+            pub fn install() {
+                #installer
+            }
+
+            #function
+        }
+    }
+    .into()
+}
+
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn unwindable(_: TS, input: TS) -> TS {
+    let mut function = syn::parse_macro_input!(input as syn::ItemFn);
+
+    function.sig.abi = Some(syn::Abi {
+        extern_token: syn::token::Extern(function.sig.span()),
+        name: Some(syn::LitStr::new("C", function.sig.span())),
+    });
+
+    if let Err(e) = map_function_block(&mut function) {
+        abort!(e)
+    };
+
+    let is_manually_exported = {
+        let mut is_exported = false;
+        for attr in function.attrs.iter() {
+            if attr.path.is_ident("no_mangle") || attr.path.is_ident("export_name") {
+                is_exported = true;
+                break;
+            }
+        }
+        is_exported
+    };
+
+    let export_attr = if is_manually_exported {
+        quote::quote!()
+    } else {
+        quote::quote!(#[no_mangle])
+    };
+
+    quote::quote! {
+        #export_attr
+        #function
+    }
+    .into()
 }

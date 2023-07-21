@@ -16,6 +16,7 @@ proc-macro2 = "1"
 quote = "1"
 skyline = "0.2"
 syn = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
 
 [package]
 name = "smashline-plugin"
@@ -31,8 +32,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 skyline.workspace = true
-smashline-macro.path = "crates/smashline-macro"
 smashline.path = "crates/smashline"
+skyline_smash = { git = "https://github.com/blu-dev/skyline-smash" }
 
 [profile.dev]
 panic = "abort"

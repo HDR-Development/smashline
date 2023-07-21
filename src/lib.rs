@@ -95,12 +95,19 @@
 //! scripts.
 //!
 
-use smashline::L2CAgentBase;
+use smash::{lib::lua_const::*, lua2cpp::L2CFighterCommon};
+use smashline::{L2CAgentBase, L2CValue};
 
-#[smashline_macro::acmd_script("captain", ["game_attackairhi", "game_attackairlw"])]
+#[smashline::status_script("captain", FIGHTER_STATUS_KIND_SPECIAL_N)]
+fn falcon_special_n_pre(fighter: &mut L2CFighterCommon) -> L2CValue {
+    L2CValue::new_int(0)
+}
+
+#[smashline::acmd_script("captain", ["game_attackairhi", "game_attackairlw"])]
 fn falcon_attack_air(fighter: &mut L2CAgentBase) {}
 
 #[skyline::main(name = "smashline")]
 pub fn main() {
     falcon_attack_air::install();
+    falcon_special_n_pre::install();
 }
