@@ -2,6 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
+    spanned::Spanned,
 };
 
 mod kw {
@@ -215,6 +216,100 @@ impl StatusAttributes {
 }
 
 impl Parse for StatusAttributes {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Self::parse_named(input).or_else(|_| Self::parse_unnamed(input))
+    }
+}
+
+pub struct LineAttributes {
+    agent: Option<syn::Expr>,
+    line: ScriptLine,
+}
+
+impl LineAttributes {
+    pub fn installer(
+        &self,
+        crate_tokens: TokenStream,
+        name: &syn::Ident,
+    ) -> syn::Result<TokenStream> {
+        let Self { agent, line } = self;
+
+        let fn_name = match line.arg_count {
+            0 => quote::quote!(install_basic_line_callback),
+            1 => quote::quote!(install_one_arg_line_callback),
+            2 => quote::quote!(install_two_arg_line_callback),
+            _ => {
+                return Err(syn::Error::new(name.span(), "invalid line id found"));
+            }
+        };
+
+        let line_id = &line.line_id;
+
+        let agent = if let Some(agent) = agent.as_ref() {
+            quote::quote!(Some(#crate_tokens::AsHash40::as_hash40(#agent)))
+        } else {
+            quote::quote!(None)
+        };
+
+        Ok(quote::quote! {
+            ::smashline::api::#fn_name(
+                #agent,
+                #crate_tokens::StatusLine::#line_id as i32,
+                #name
+            );
+        })
+    }
+
+    fn parse_named(input: ParseStream) -> syn::Result<Self> {
+        let attrs = Punctuated::<StatusAttribute, syn::token::Comma>::parse_terminated(input)?;
+
+        let mut agent = None;
+        let mut line = None;
+
+        for attr in attrs {
+            match attr {
+                StatusAttribute::Agent(expr) => agent = Some(expr),
+                StatusAttribute::Status(expr) => {
+                    return Err(syn::Error::new(
+                        expr.span(),
+                        "status field not supported for line callbacks",
+                    ));
+                }
+                StatusAttribute::Line(line_) => line = Some(line_),
+            }
+        }
+
+        let Some(line) = line else {
+            return Err(syn::Error::new(input.span(), "line must be provided"));
+        };
+
+        Ok(Self { agent, line })
+    }
+
+    fn parse_unnamed(input: ParseStream) -> syn::Result<Self> {
+        let mut line = None;
+        let mut agent = None;
+
+        if let Ok(line_) = input.parse() {
+            line = Some(line_);
+        } else if let Ok(agent_) = input.parse() {
+            agent = Some(agent_);
+        } else {
+            return Err(syn::Error::new(input.span(), "unexpected input"));
+        }
+
+        if line.is_none() {
+            let _: syn::Token![,] = input.parse()?;
+            line = Some(input.parse()?);
+        }
+
+        let line = line.unwrap();
+
+        Ok(Self { agent, line })
+    }
+}
+
+impl Parse for LineAttributes {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Self::parse_named(input).or_else(|_| Self::parse_unnamed(input))
     }

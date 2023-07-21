@@ -4,7 +4,7 @@ use proc_macro2::{Group, Punct, Spacing, Span, TokenStream, TokenTree};
 use proc_macro_crate::FoundCrate;
 use proc_macro_error::{abort, proc_macro_error};
 use quote::ToTokens;
-use status::StatusAttributes;
+use status::{LineAttributes, StatusAttributes};
 use syn::spanned::Spanned;
 
 mod acmd;
@@ -100,7 +100,7 @@ fn smashline_crate_tokens() -> TokenStream {
 
 #[proc_macro_error]
 #[proc_macro_attribute]
-pub fn acmd_script(attr: TS, input: TS) -> TS {
+pub fn acmd(attr: TS, input: TS) -> TS {
     let attributes = syn::parse_macro_input!(attr as AcmdAttributes);
 
     let mut function = syn::parse_macro_input!(input as syn::ItemFn);
@@ -117,7 +117,7 @@ pub fn acmd_script(attr: TS, input: TS) -> TS {
 
     let install = attributes.installer(ident, smashline.clone());
 
-    let tokens = quote::quote! {
+    quote::quote! {
         #vis mod #ident {
             use super::*;
             #install
@@ -125,14 +125,47 @@ pub fn acmd_script(attr: TS, input: TS) -> TS {
             #[#smashline::unwindable]
             #function
         }
-    };
-
-    tokens.into()
+    }
+    .into()
 }
 
 #[proc_macro_error]
 #[proc_macro_attribute]
-pub fn status_script(attrs: TS, input: TS) -> TS {
+pub fn line(attr: TS, input: TS) -> TS {
+    let attrs = syn::parse_macro_input!(attr as LineAttributes);
+    let mut function = syn::parse_macro_input!(input as syn::ItemFn);
+
+    function.sig.abi = Some(syn::Abi {
+        extern_token: syn::token::Extern(function.sig.span()),
+        name: Some(syn::LitStr::new("C", function.sig.span())),
+    });
+
+    let smashline = smashline_crate_tokens();
+
+    let vis = &function.vis;
+    let ident = &function.sig.ident;
+    let installer = match attrs.installer(smashline, ident) {
+        Ok(installer) => installer,
+        Err(e) => abort!(e),
+    };
+
+    quote::quote! {
+        #vis mod #ident {
+            use super::*;
+
+            pub fn install() {
+                #installer
+            }
+
+            #function
+        }
+    }
+    .into()
+}
+
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn status(attrs: TS, input: TS) -> TS {
     let mut attrs = syn::parse_macro_input!(attrs as StatusAttributes);
     let mut function = syn::parse_macro_input!(input as syn::ItemFn);
 

@@ -214,4 +214,31 @@ pub mod api {
         T: DerefMut<Target = L2CFighterBase>,
     {
     }
+
+    pub fn install_basic_line_callback<T>(
+        agent: Option<Hash40>,
+        line: i32,
+        function: extern "C" fn(&mut T),
+    ) where
+        T: DerefMut<Target = L2CFighterBase>,
+    {
+    }
+
+    pub fn install_one_arg_line_callback<T>(
+        agent: Option<Hash40>,
+        line: i32,
+        function: extern "C" fn(&mut T, L2CValue),
+    ) where
+        T: DerefMut<Target = L2CFighterBase>,
+    {
+    }
+
+    pub fn install_two_arg_line_callback<T>(
+        agent: Option<Hash40>,
+        line: i32,
+        function: extern "C" fn(&mut T, L2CValue, L2CValue),
+    ) where
+        T: DerefMut<Target = L2CFighterBase>,
+    {
+    }
 }
