@@ -9,5 +9,6 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+rtld.path = "../rtld"
 skyline.workspace = true
 vtable-macro.path = "../vtable-macro"

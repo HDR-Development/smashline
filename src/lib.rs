@@ -94,32 +94,66 @@
 //! might display an interaction with sloped ground or how rumble is applied will happen in these
 //! scripts.
 //!
+#![feature(new_uninit)]
+#![allow(non_snake_case)]
 
-use smash::{lib::lua_const::*, lua2cpp::L2CFighterCommon};
-use smashline::{L2CAgentBase, L2CValue};
+use smash::lua2cpp::L2CFighterCommon;
+use smashline::{Hash40, L2CValue, LuaConst, StatusLine};
 
-#[smashline::in_target("captain", 0x123456)]
-fn falcon_special_n_main_loop(fighter: &mut L2CFighterCommon) -> L2CValue;
+pub mod api;
+mod create_agent;
+mod static_accessor;
 
-#[smashline::status("captain", FIGHTER_STATUS_KIND_SPECIAL_N, main_loop)]
-fn falcon_special_n(fighter: &mut L2CFighterCommon) -> L2CValue {
-    original(fighter)
+#[smashline::status("mario", 0x1DC)]
+fn mario_neutral_b_main(fighter: &mut L2CFighterCommon) -> L2CValue {
+    fighter.change_status(
+        smash::lib::L2CValue::new(0x1e3),
+        smash::lib::L2CValue::new(false),
+    );
+    smash::lib::L2CValue::new(0).into()
 }
 
-#[smashline::acmd("captain", ["game_attackairhi", "game_attackairlw"])]
-fn falcon_attack_air(fighter: &mut L2CAgentBase) {}
+#[smashline::new_status("mario", 0x0)]
+fn mario_new_status_pre(fighter: &mut L2CFighterCommon) -> L2CValue {
+    smash::lib::L2CValue::new(0).into()
+}
 
-#[smashline::line(pre)]
-fn pre_callback(fighter: &mut L2CFighterCommon) {}
+#[smashline::new_status("mario", 0x0)]
+fn mario_new_status_main(fighter: &mut L2CFighterCommon) -> L2CValue {
+    todo!()
+}
 
-#[smashline::line("captain", exec)]
-fn captain_exec(fighter: &mut L2CFighterCommon) {}
+#[smashline::new_status("mario", 0x0)]
+fn mario_new_status_end(fighter: &mut L2CFighterCommon) -> L2CValue {
+    smash::lib::L2CValue::new(0).into()
+}
 
-#[smashline::line(check_attack)]
-fn check_attack_callback(fighter: &mut L2CFighterCommon, arg1: L2CValue, arg2: L2CValue) {}
-
-#[skyline::main(name = "smashline")]
+#[skyline::main(name = "smashline-plugin")]
 pub fn main() {
-    falcon_attack_air::install();
-    falcon_special_n::install();
+    create_agent::install_create_agent_hooks();
+    create_agent::install_create_agent_share_hooks();
+    create_agent::install_status_create_agent_hooks();
+    mario_neutral_b_main::install();
+    mario_new_status_pre::install();
+    mario_new_status_main::install();
+    mario_new_status_end::install();
+
+    std::panic::set_hook(Box::new(|info| {
+        let location = info.location().unwrap();
+
+        let msg = match info.payload().downcast_ref::<&'static str>() {
+            Some(s) => *s,
+            None => match info.payload().downcast_ref::<String>() {
+                Some(s) => &s[..],
+                None => "Box<Any>",
+            },
+        };
+
+        let err_msg = format!("thread has panicked at '{}', {}", msg, location);
+        skyline::error::show_error(
+            69,
+            "Skyline plugin as panicked! Please open the details and send a screenshot to the developer, then close the game.\n",
+            err_msg.as_str()
+        );
+    }));
 }

@@ -393,6 +393,20 @@ pub fn vtable(attr: TS, input: TS) -> TS {
 
     let setters = vtable_procs.iter().map(|proc| map_to_setter(vtable_crate.clone(), vtable_name.clone(), proc));
 
+    let accessor_trait = if attrs.has_type_info {
+        quote::quote! {
+            impl #vtable_crate::VTableAccessor for #accessor_name {
+                const HAS_TYPE_INFO: bool = true;
+            }
+        }
+    } else {
+        quote::quote! {
+            impl #vtable_crate::VTableAccessor for #accessor_name {
+                const HAS_TYPE_INFO: bool = false;
+            }
+        }
+    };
+
     quote::quote! {
         #[repr(C)]
         struct #vtable_name {
@@ -423,5 +437,7 @@ pub fn vtable(attr: TS, input: TS) -> TS {
 
             #(#setters)*
         }
+
+        #accessor_trait
     }.into()
 }

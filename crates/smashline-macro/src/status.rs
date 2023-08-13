@@ -25,6 +25,7 @@ mod kw {
     syn::custom_keyword!(on_change_lr);
     syn::custom_keyword!(leave_stop);
     syn::custom_keyword!(notify_event_gimmick);
+    syn::custom_keyword!(calc_param);
 }
 
 struct ScriptLine {
@@ -52,7 +53,8 @@ impl ScriptLine {
             "check_attack" => ("CheckAttack", 2),
             "on_change_lr" => ("OnChangeLr", 2),
             "leave_stop" => ("LeaveStop", 2),
-            "notify_event_gimmick" => ("NotifyEventGimmick", 1);
+            "notify_event_gimmick" => ("NotifyEventGimmick", 1),
+            "calc_param" => ("CalcParam", 0);
             _ => {
                 return Err(syn::Error::new(name.span(), "unable to determine line from name"));
             }
@@ -86,7 +88,8 @@ impl Parse for ScriptLine {
             kw::check_attack => ("CheckAttack", 2),
             kw::on_change_lr => ("OnChangeLr", 2),
             kw::leave_stop => ("LeaveStop", 2),
-            kw::notify_event_gimmick => ("NotifyEventGimmick", 1);
+            kw::notify_event_gimmick => ("NotifyEventGimmick", 1),
+            kw::calc_param => ("CalcParam", 0);
             _ => {
                 return Err(syn::Error::new(input.span(), "unsupported line id"));
             }
@@ -167,6 +170,7 @@ impl StatusAttributes {
         &self,
         crate_tokens: TokenStream,
         name: &syn::Ident,
+        is_new: bool,
     ) -> syn::Result<TokenStream> {
         let Self {
             agent,
@@ -178,10 +182,12 @@ impl StatusAttributes {
             return Err(syn::Error::new(name.span(), "no status line id found"));
         };
 
+        let new = if is_new { "new_" } else { "" };
+
         let fn_name = match line.arg_count {
-            0 => quote::quote!(install_basic_status_script),
-            1 => quote::quote!(install_one_arg_status_script),
-            2 => quote::quote!(install_two_arg_status_script),
+            0 => quote::format_ident!("install_basic_{new}status_script"),
+            1 => quote::format_ident!("install_one_arg_{new}status_script"),
+            2 => quote::format_ident!("install_two_arg_{new}status_script"),
             _ => {
                 return Err(syn::Error::new(name.span(), "invalid status line id found"));
             }
@@ -189,13 +195,25 @@ impl StatusAttributes {
 
         let line_id = &line.line_id;
 
+        let orig = if is_new {
+            quote::quote!()
+        } else {
+            quote::quote!(&ORIGINAL_FUNCTION)
+        };
+
+        let luac = if is_new {
+            quote::quote!(#status)
+        } else {
+            quote::quote!(#crate_tokens::IntoLuaConst::into_lua_const(#status))
+        };
+
         Ok(quote::quote! {
             ::smashline::api::#fn_name(
                 #crate_tokens::AsHash40::as_hash40(#agent),
-                #crate_tokens::IntoLuaConst::into_lua_const(#status),
-                #crate_tokens::StatusLine::#line_id as i32,
+                #luac,
+                #crate_tokens::StatusLine::#line_id,
                 #name,
-                &ORIGINAL_FUNCTION
+                #orig
             );
         })
     }

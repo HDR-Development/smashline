@@ -239,7 +239,7 @@ pub fn status(attrs: TS, input: TS) -> TS {
 
     let vis = &function.vis;
     let ident = &function.sig.ident;
-    let installer = match attrs.installer(smashline.clone(), ident) {
+    let installer = match attrs.installer(smashline.clone(), ident, false) {
         Ok(installer) => installer,
         Err(e) => abort!(e),
     };
@@ -254,6 +254,44 @@ pub fn status(attrs: TS, input: TS) -> TS {
             use super::*;
 
             #original
+
+            pub fn install() {
+                #installer
+            }
+
+            #function
+        }
+    }
+    .into()
+}
+
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn new_status(attrs: TS, input: TS) -> TS {
+    let mut attrs = syn::parse_macro_input!(attrs as StatusAttributes);
+    let mut function = syn::parse_macro_input!(input as syn::ItemFn);
+
+    if let Err(e) = attrs.try_set_line(&function.sig.ident) {
+        abort!(e);
+    }
+
+    function.sig.abi = Some(syn::Abi {
+        extern_token: syn::token::Extern(function.sig.span()),
+        name: Some(syn::LitStr::new("C", function.sig.span())),
+    });
+
+    let smashline = smashline_crate_tokens();
+
+    let vis = &function.vis;
+    let ident = &function.sig.ident;
+    let installer = match attrs.installer(smashline.clone(), ident, true) {
+        Ok(installer) => installer,
+        Err(e) => abort!(e),
+    };
+
+    quote::quote! {
+        #vis mod #ident {
+            use super::*;
 
             pub fn install() {
                 #installer

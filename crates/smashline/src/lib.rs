@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub use smashline_macro::*;
 
-#[cfg(feature = "skyline_smash")]
+#[cfg(all(not(feature = "smash-rs"), feature = "skyline_smash"))]
 pub use smash::{
     lib::{utility::Variadic, L2CValue},
     lua2cpp::{L2CAgentBase, L2CFighterBase},
@@ -12,8 +12,8 @@ pub use smash::{
 };
 
 #[cfg(feature = "smash-rs")]
-pub use smash::{
-    lib::L2CValueHack as L2CValue,
+pub use smash_rs::{
+    lib::{utility::Variadic, L2CValueHack as L2CValue},
     lua2cpp::{L2CAgentBase, L2CFighterBase},
     phx::Hash40,
 };
@@ -21,6 +21,7 @@ pub use smash::{
 pub use locks;
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub enum Priority {
     Default,
     Low,
@@ -53,6 +54,7 @@ pub enum StatusLine {
     OnChangeLr,
     LeaveStop,
     NotifyEventGimmick,
+    CalcParam,
 
     MainLoop = -1,
 }
@@ -131,9 +133,17 @@ impl AsHash40 for &str {
     }
 }
 
+#[cfg(feature = "skyline-smash")]
 impl AsHash40 for u64 {
     fn as_hash40(self) -> Hash40 {
         Hash40::new_raw(self)
+    }
+}
+
+#[cfg(feature = "smash-rs")]
+impl AsHash40 for u64 {
+    fn as_hash40(self) -> Hash40 {
+        Hash40(self)
     }
 }
 
@@ -178,6 +188,29 @@ impl IntoLuaConst for smash::lib::LuaConst {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub enum BattleObjectCategory {
+    Fighter = 0,
+    Weapon,
+    Enemy,
+    Gimmick,
+    Item,
+}
+
+impl BattleObjectCategory {
+    pub fn from_battle_object_id(id: u32) -> Option<Self> {
+        match id >> 0x1C {
+            0x0 => Some(Self::Fighter),
+            0x1 => Some(Self::Weapon),
+            0x2 => Some(Self::Enemy),
+            0x3 => Some(Self::Gimmick),
+            0x4 => Some(Self::Item),
+            _ => None,
+        }
+    }
+}
+
 macro_rules! decl_imports {
     ($($V:vis fn $name:ident($($arg:ident: $T:ty),*) $(-> $Ret:ty)?;)*) => {
         $(
@@ -217,9 +250,16 @@ decl_imports! {
     fn smashline_install_status_script(
         agent: Hash40,
         status: LuaConst,
-        line: i32,
+        line: StatusLine,
         function: *const (),
         original: &'static locks::RwLock<*const ()>
+    );
+
+    fn smashline_install_new_status_script(
+        agent: Hash40,
+        id: i32,
+        line: StatusLine,
+        function: *const ()
     );
 
     fn smashline_install_line_callback(
@@ -254,10 +294,49 @@ pub mod api {
         smashline_install_acmd_script(agent, script, category, priority, function);
     }
 
+    pub fn install_basic_new_status_script<T>(
+        agent: Hash40,
+        status: i32,
+        line: StatusLine,
+        function: extern "C" fn(&mut T) -> L2CValue,
+    ) where
+        T: DerefMut<Target = L2CFighterBase>,
+    {
+        unsafe {
+            smashline_install_new_status_script(agent, status, line, std::mem::transmute(function));
+        }
+    }
+
+    pub fn install_one_arg_new_status_script<T>(
+        agent: Hash40,
+        status: i32,
+        line: StatusLine,
+        function: extern "C" fn(&mut T, L2CValue) -> L2CValue,
+    ) where
+        T: DerefMut<Target = L2CFighterBase>,
+    {
+        unsafe {
+            smashline_install_new_status_script(agent, status, line, std::mem::transmute(function));
+        }
+    }
+
+    pub fn install_two_arg_new_status_script<T>(
+        agent: Hash40,
+        status: i32,
+        line: StatusLine,
+        function: extern "C" fn(&mut T, L2CValue, L2CValue) -> L2CValue,
+    ) where
+        T: DerefMut<Target = L2CFighterBase>,
+    {
+        unsafe {
+            smashline_install_new_status_script(agent, status, line, std::mem::transmute(function));
+        }
+    }
+
     pub fn install_basic_status_script<T>(
         agent: Hash40,
         status: LuaConst,
-        line: i32,
+        line: StatusLine,
         function: extern "C" fn(&mut T) -> L2CValue,
         original: &'static locks::RwLock<extern "C" fn(&mut T) -> L2CValue>,
     ) where
@@ -277,7 +356,7 @@ pub mod api {
     pub fn install_one_arg_status_script<T>(
         agent: Hash40,
         status: LuaConst,
-        line: i32,
+        line: StatusLine,
         function: extern "C" fn(&mut T, L2CValue) -> L2CValue,
         original: &'static locks::RwLock<extern "C" fn(&mut T, L2CValue) -> L2CValue>,
     ) where
@@ -297,7 +376,7 @@ pub mod api {
     pub fn install_two_arg_status_script<T>(
         agent: Hash40,
         status: LuaConst,
-        line: i32,
+        line: StatusLine,
         function: extern "C" fn(&mut T, L2CValue, L2CValue) -> L2CValue,
         original: &'static locks::RwLock<extern "C" fn(&mut T, L2CValue, L2CValue) -> L2CValue>,
     ) where
@@ -322,7 +401,7 @@ pub mod api {
         T: DerefMut<Target = L2CFighterBase>,
     {
         smashline_install_line_callback(
-            agent.and_then(|x| NonZeroU64::new(x.hash)),
+            agent.and_then(|x| NonZeroU64::new(x.0)),
             line,
             function as *const (),
         );
@@ -336,7 +415,7 @@ pub mod api {
         T: DerefMut<Target = L2CFighterBase>,
     {
         smashline_install_line_callback(
-            agent.and_then(|x| NonZeroU64::new(x.hash)),
+            agent.and_then(|x| NonZeroU64::new(x.0)),
             line,
             function as *const (),
         );
@@ -350,7 +429,7 @@ pub mod api {
         T: DerefMut<Target = L2CFighterBase>,
     {
         smashline_install_line_callback(
-            agent.and_then(|x| NonZeroU64::new(x.hash)),
+            agent.and_then(|x| NonZeroU64::new(x.0)),
             line,
             function as *const (),
         );
@@ -360,7 +439,7 @@ pub mod api {
         smashline_get_target_function(StringFFI::from_str(module_name), offset).map(|x| x.get())
     }
 
-    pub fn install_symbol_hook<T>(
+    pub fn install_symbol_hook(
         module_name: impl Into<String>,
         replacement: *const (),
         original: &'static locks::RwLock<*const ()>,

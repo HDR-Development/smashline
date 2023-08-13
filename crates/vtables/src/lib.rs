@@ -6,6 +6,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+pub use vtable_macro::*;
+
 const CUSTOM_VTABLE_MAGIC: u64 = u64::from_le_bytes(*b"VRTMANIP");
 
 pub trait VTableAccessor {
@@ -13,14 +15,34 @@ pub trait VTableAccessor {
 }
 
 pub trait VirtualClass: 'static {
+    const DYNAMIC_MODULE: Option<&'static str>;
     const VTABLE_OFFSET: usize;
+    const DISABLE_OFFSET_CHECK: bool;
+
     type Accessor: VTableAccessor;
     type CustomData: Default + 'static;
 
     fn vtable_accessor(&self) -> &Self::Accessor;
     fn vtable_accessor_mut(&mut self) -> &mut Self::Accessor;
+
+    fn main_address() -> usize {
+        match Self::DYNAMIC_MODULE {
+            Some(module_name) => {
+                let object =
+                    rtld::find_module_by_name(module_name).expect("module is not in memory!");
+                object.get_address_range(rtld::Section::Text).start as usize
+            }
+            None => {
+                // SAFETY: This code is intended to be run on a switch console, which will only happen
+                // with skyline present, so this is safe
+                unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) }
+                    .expose_addr()
+            }
+        }
+    }
 }
 
+#[repr(C)]
 struct VTableContext {
     magic: u64,
     type_id: TypeId,
@@ -74,20 +96,21 @@ impl VTableContext {
 /// - If this vtable has been mutated, then the type if of `T` will be compared to the one
 /// stored at mutation time. If they do not match, then this function will panic.
 #[track_caller]
-pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: &mut V) {
-    let vtable_ptr = (vtable as *const V).cast::<u64>();
-
-    // SAFETY: This code is intended to be run on a switch console, which will only happen
-    // with skyline present, so this is safe
-    let main_address =
-        unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) }.expose_addr();
+pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: &mut &mut V) {
+    let vtable_ptr = (*vtable as *const V).cast::<u64>();
 
     if !vtable_ptr.is_aligned() {
         panic!("object vtable is not aligned");
     }
 
-    // This vtable has not been relocated yet, so now it's time to do so
-    if vtable_ptr.expose_addr() == main_address + T::VTABLE_OFFSET {
+    let needs_reloc = if T::DISABLE_OFFSET_CHECK {
+        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+            != rtld::MemoryState::DereferencableOutsideModule
+    } else {
+        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+    };
+
+    if dbg!(needs_reloc) {
         // Allocating zero bytes is undefined behavior, so just don't do it
         assert!(std::mem::size_of::<V>() > 0);
 
@@ -136,8 +159,10 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
 
         // SAFETY: Our memory is allocated, this is as safe as the last deref
         unsafe {
-            let data = std::ptr::read(vtable);
+            let data = std::ptr::read(*vtable);
             std::ptr::write(new_memory.add(new_vtable_offset * 0x8).cast(), data);
+            *(vtable as *mut &mut V as *mut *mut V) =
+                new_memory.add(new_vtable_offset * 0x8).cast();
         }
 
         return;
@@ -149,11 +174,17 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
     }
 
     let ctx = if <T::Accessor as VTableAccessor>::HAS_TYPE_INFO {
+        // SAFETY: Switch's memory space cannot go above isize::MAX so this will be fine
+        if unsafe { vtable_ptr.offset_from(std::ptr::null_mut()) } < 0x10 {
+            panic!("object vtable pointer is invalid")
+        }
+
         // SAFETY: This is safe because we've ensured that the pointer is aligned properly
         // and that it is not null, so this should not overflow
-        unsafe { vtable_ptr.sub(1) }.cast::<VTableContext>()
+        unsafe { vtable_ptr.sub(2) }.cast::<*const VTableContext>()
     } else {
-        vtable_ptr.cast::<VTableContext>()
+        // SAFETY: Same as above
+        unsafe { vtable_ptr.sub(1) }.cast::<*const VTableContext>()
     };
 
     if ctx.is_null() {
@@ -161,7 +192,7 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
     }
 
     // SAFETY: This is safe because we've already ensured above that it is not null
-    let context = unsafe { &*ctx };
+    let context = unsafe { &**ctx };
 
     if context.magic != CUSTOM_VTABLE_MAGIC {
         panic!("vtable context is malformed (incorrect magic)");
@@ -184,13 +215,15 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
 pub fn vtable_read_guard<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) {
     let vtable_ptr = (vtable as *const V).cast::<u64>();
 
-    // SAFETY: This code is intended to be run on a switch console, which will only happen
-    // with skyline present, so this is safe
-    let main_address =
-        unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) }.expose_addr();
+    let needs_reloc = if T::DISABLE_OFFSET_CHECK {
+        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+            != rtld::MemoryState::DereferencableOutsideModule
+    } else {
+        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+    };
 
     // This vtable has not been relocated yet, so this is fine
-    if vtable_ptr.expose_addr() == main_address + T::VTABLE_OFFSET {
+    if needs_reloc {
         return;
     }
 
@@ -205,16 +238,16 @@ pub fn vtable_read_guard<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) {
 
     let ctx = if <T::Accessor as VTableAccessor>::HAS_TYPE_INFO {
         // SAFETY: Switch's memory space cannot go above isize::MAX so this will be fine
-        if unsafe { vtable_ptr.offset_from(std::ptr::null_mut()) } < 10 {
+        if unsafe { vtable_ptr.offset_from(std::ptr::null_mut()) } < 0x10 {
             panic!("object vtable pointer is invalid")
         }
 
         // SAFETY: This is safe because we've ensured that the pointer is aligned properly
         // and that it is not null, so this should not overflow
-        unsafe { vtable_ptr.sub(2) }.cast::<VTableContext>()
+        unsafe { vtable_ptr.sub(2) }.cast::<*const VTableContext>()
     } else {
         // SAFETY: Same as above
-        unsafe { vtable_ptr.sub(1) }.cast::<VTableContext>()
+        unsafe { vtable_ptr.sub(1) }.cast::<*const VTableContext>()
     };
 
     if ctx.is_null() {
@@ -222,7 +255,7 @@ pub fn vtable_read_guard<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) {
     }
 
     // SAFETY: This is safe because we've already ensured above that it is not null
-    let context = unsafe { &*ctx };
+    let context = unsafe { &**ctx };
 
     if context.magic != CUSTOM_VTABLE_MAGIC {
         panic!("vtable context is malformed (incorrect magic)");
@@ -250,12 +283,14 @@ pub fn vtable_read_guard<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) {
 pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) -> &T::CustomData {
     let vtable_ptr = (vtable as *const V).cast::<u64>();
 
-    // SAFETY: This code is intended to be run on a switch console, which will only happen
-    // with skyline present, so this is safe
-    let main_address =
-        unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) }.expose_addr();
+    let needs_reloc = if T::DISABLE_OFFSET_CHECK {
+        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+            != rtld::MemoryState::DereferencableOutsideModule
+    } else {
+        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+    };
 
-    if vtable_ptr.expose_addr() == main_address + T::VTABLE_OFFSET {
+    if needs_reloc {
         panic!("vtable has not been relocated");
     }
 
@@ -269,11 +304,17 @@ pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) ->
     }
 
     let ctx = if <T::Accessor as VTableAccessor>::HAS_TYPE_INFO {
+        // SAFETY: Switch's memory space cannot go above isize::MAX so this will be fine
+        if unsafe { vtable_ptr.offset_from(std::ptr::null_mut()) } < 0x10 {
+            panic!("object vtable pointer is invalid")
+        }
+
         // SAFETY: This is safe because we've ensured that the pointer is aligned properly
         // and that it is not null, so this should not overflow
-        unsafe { vtable_ptr.sub(1) }.cast::<VTableContext>()
+        unsafe { vtable_ptr.sub(2) }.cast::<*const VTableContext>()
     } else {
-        vtable_ptr.cast::<VTableContext>()
+        // SAFETY: Same as above
+        unsafe { vtable_ptr.sub(1) }.cast::<*const VTableContext>()
     };
 
     if ctx.is_null() {
@@ -281,7 +322,7 @@ pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) ->
     }
 
     // SAFETY: This is safe because we've already ensured above that it is not null
-    let context = unsafe { &*ctx };
+    let context = unsafe { &**ctx };
 
     if context.magic != CUSTOM_VTABLE_MAGIC {
         panic!("vtable context is malformed (incorrect magic)");
@@ -299,12 +340,14 @@ pub fn vtable_custom_data_mut<V, T: VirtualClass + DerefMut<Target = V>>(
 ) -> &mut T::CustomData {
     let vtable_ptr = (vtable as *mut V).cast::<u64>();
 
-    // SAFETY: This code is intended to be run on a switch console, which will only happen
-    // with skyline present, so this is safe
-    let main_address =
-        unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) }.expose_addr();
+    let needs_reloc = if T::DISABLE_OFFSET_CHECK {
+        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+            != rtld::MemoryState::DereferencableOutsideModule
+    } else {
+        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+    };
 
-    if vtable_ptr.expose_addr() == main_address + T::VTABLE_OFFSET {
+    if needs_reloc {
         panic!("vtable has not been relocated");
     }
 
@@ -318,11 +361,17 @@ pub fn vtable_custom_data_mut<V, T: VirtualClass + DerefMut<Target = V>>(
     }
 
     let ctx = if <T::Accessor as VTableAccessor>::HAS_TYPE_INFO {
+        // SAFETY: Switch's memory space cannot go above isize::MAX so this will be fine
+        if unsafe { vtable_ptr.offset_from(std::ptr::null_mut()) } < 0x10 {
+            panic!("object vtable pointer is invalid")
+        }
+
         // SAFETY: This is safe because we've ensured that the pointer is aligned properly
         // and that it is not null, so this should not overflow
-        unsafe { vtable_ptr.sub(1) }.cast::<VTableContext>()
+        unsafe { vtable_ptr.sub(2) }.cast::<*mut VTableContext>()
     } else {
-        vtable_ptr.cast::<VTableContext>()
+        // SAFETY: Same as above
+        unsafe { vtable_ptr.sub(1) }.cast::<*mut VTableContext>()
     };
 
     if ctx.is_null() {
@@ -330,7 +379,7 @@ pub fn vtable_custom_data_mut<V, T: VirtualClass + DerefMut<Target = V>>(
     }
 
     // SAFETY: This is safe because we've already ensured above that it is not null
-    let context = unsafe { &mut *ctx };
+    let context = unsafe { &mut **ctx };
 
     if context.magic != CUSTOM_VTABLE_MAGIC {
         panic!("vtable context is malformed (incorrect magic)");

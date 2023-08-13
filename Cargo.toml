@@ -32,10 +32,20 @@ crate-type = ["cdylib"]
 
 [dependencies]
 skyline.workspace = true
-smashline.path = "crates/smashline"
-skyline_smash = { git = "https://github.com/blu-dev/skyline-smash", features = [
-    "weak_l2cvalue",
+smashline = { path = "crates/smashline", default-features = false, features = [
+    "smash-rs",
 ] }
+smash = { git = "https://github.com/blu-dev/smash-rs" }
+locks.path = "crates/locks"
+paste = "1"
+vtables.path = "crates/vtables"
+lua_bind_hash = "1.0.1"
+
+[patch.'https://github.com/BenHall-7/hash40-rs']
+hash40 = { git = "https://github.com/blu-dev/hash40-rs", branch = "patch-1" }
+
+[patch.'https://github.com/blu-dev/smash-rs']
+smash-rs = { package = "smash", path = "../smash-rs" }
 
 [profile.dev]
 panic = "abort"
