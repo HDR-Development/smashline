@@ -32,9 +32,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 skyline.workspace = true
-smashline = { path = "crates/smashline", default-features = false, features = [
-    "smash-rs",
-] }
+smashline = { path = "crates/smashline", features = ["smash-rs"] }
 smash = { git = "https://github.com/blu-dev/smash-rs" }
 locks.path = "crates/locks"
 paste = "1"

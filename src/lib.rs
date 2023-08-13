@@ -98,8 +98,14 @@
 #![allow(non_snake_case)]
 
 use skyline::hooks::InlineCtx;
-use smash::lua2cpp::L2CFighterCommon;
-use smashline::{Hash40, L2CFighterBase, L2CValue, LuaConst, StatusLine};
+use smash::lua2cpp::{L2CFighterCommon, L2CWeaponCommon};
+use smashline::{
+    skyline_smash::{
+        app::ArticleOperationTarget,
+        lib::lua_const::{ARTICLE_OPE_TARGET_ALL, FIGHTER_LUCINA_GENERATE_ARTICLE_MASK},
+    },
+    Hash40, L2CFighterBase, L2CValue, LuaConst, StatusLine,
+};
 
 pub mod api;
 mod callbacks;
@@ -145,6 +151,42 @@ fn mario_new_status_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     smash::lib::L2CValue::new(0).into()
 }
 
+#[smashline::new_status("lucina_mask", 0x0)]
+fn mask_new_status_pre(weapon: &mut L2CWeaponCommon) -> L2CValue {
+    println!("Calling pre from lucina mask");
+    smash::lib::L2CValue::new(0).into()
+}
+
+#[smashline::new_status("lucina_mask", 0x0)]
+fn mask_new_status_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
+    println!("Calling main from lucina mask");
+    smash::lib::L2CValue::new(0).into()
+}
+
+#[smashline::new_status("lucina_mask", 0x0)]
+fn mask_new_status_end(weapon: &mut L2CWeaponCommon) -> L2CValue {
+    println!("Calling end from lucina mask");
+    smash::lib::L2CValue::new(0).into()
+}
+
+#[smashline::line("lucina", main)]
+fn main_status(fighter: &mut L2CFighterCommon) {
+    use smashline::skyline_smash::app::lua_bind::*;
+    unsafe {
+        if ArticleModule::is_exist(
+            fighter.module_accessor as _,
+            *FIGHTER_LUCINA_GENERATE_ARTICLE_MASK,
+        ) {
+            ArticleModule::change_status(
+                fighter.module_accessor as _,
+                *FIGHTER_LUCINA_GENERATE_ARTICLE_MASK,
+                0,
+                ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL),
+            );
+        }
+    }
+}
+
 #[skyline::main(name = "smashline-plugin")]
 pub fn main() {
     create_agent::install_create_agent_hooks();
@@ -154,6 +196,11 @@ pub fn main() {
     // mario_new_status_pre::install();
     // mario_new_status_main::install();
     // mario_new_status_end::install();
+
+    main_status::install();
+    mask_new_status_pre::install();
+    mask_new_status_main::install();
+    mask_new_status_end::install();
 
     mario_opff::install();
     mario_check_attack::install();
@@ -171,11 +218,11 @@ pub fn main() {
             },
         };
 
-        let err_msg = format!("thread has panicked at '{}', {}", msg, location);
+        let err_msg = format!("smashline has panicked: '{}', {}", msg, location);
         skyline::error::show_error(
             69,
-            "Skyline plugin as panicked! Please open the details and send a screenshot to the developer, then close the game.\n",
-            err_msg.as_str()
+            "Smashline has panicked! Please PayPal $10 to the.blu.dev@gmail.com to fix it :)",
+            err_msg.as_str(),
         );
     }));
 }

@@ -85,13 +85,8 @@ unsafe fn nro_hook(
 
             let target_offset = hook.offset as isize + (signed_offset * 4) as isize;
             let new_target_offset = target_offset - hook.code_cave_offset as isize;
-            println!("new_offset: {new_target_offset:#x}");
             let signed_offset = ((new_target_offset / 4) as i32) & 0x3FFFFFF as i32;
             let instruction = 0x14000000 | signed_offset as u32;
-            println!(
-                "bl replacement: {:#x} => {instruction:#x}",
-                base + hook.code_cave_offset as u64
-            );
             skyline::patching::sky_memcpy(
                 (base + hook.code_cave_offset as u64) as _,
                 &instruction as *const u32 as _,

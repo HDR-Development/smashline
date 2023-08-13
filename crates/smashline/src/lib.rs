@@ -11,8 +11,12 @@ pub use smash::{
     phx::Hash40,
 };
 
+#[cfg(feature = "skyline_smash")]
+pub use smash as skyline_smash;
+
 #[cfg(feature = "smash-rs")]
 pub use smash_rs::{
+    self,
     lib::{utility::Variadic, L2CValueHack as L2CValue},
     lua2cpp::{L2CAgentBase, L2CFighterBase},
     phx::Hash40,
