@@ -672,6 +672,11 @@ fn create_agent_status_weapon(
     Some(unsafe { std::mem::transmute(wrapper) })
 }
 
+pub(crate) fn agent_hash(fighter: &L2CFighterBase) -> Hash40 {
+    let wrapper: &'static L2CFighterWrapper = unsafe { std::mem::transmute(fighter) };
+    vtables::vtable_custom_data::<_, L2CFighterWrapper>(wrapper.deref()).hash
+}
+
 pub fn install_status_create_agent_hooks() {
     skyline::install_hooks! {
         create_agent_status_fighter,

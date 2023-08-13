@@ -1,6 +1,11 @@
+use std::num::NonZeroU64;
+
 use smashline::{Acmd, Hash40, L2CAgentBase, LuaConst, Priority, StatusLine, Variadic};
 
-use crate::create_agent::{AcmdScript, StatusScript, StatusScriptFunction, StatusScriptId};
+use crate::{
+    callbacks::{StatusCallback, StatusCallbackFunction},
+    create_agent::{AcmdScript, StatusScript, StatusScriptFunction, StatusScriptId},
+};
 
 #[no_mangle]
 pub extern "C" fn smashline_install_acmd_script(
@@ -53,4 +58,18 @@ pub extern "C" fn smashline_install_new_status_script(
             id: StatusScriptId::New(id),
             function: StatusScriptFunction::from_line(line, function),
         });
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_install_line_callback(
+    agent: Option<NonZeroU64>,
+    line: StatusLine,
+    function: *const (),
+) {
+    let agent = agent.map(|value| Hash40(value.get()));
+
+    crate::callbacks::CALLBACKS.write().push(StatusCallback {
+        hash: agent,
+        function: StatusCallbackFunction::new(line, function),
+    });
 }

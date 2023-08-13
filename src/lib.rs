@@ -97,12 +97,29 @@
 #![feature(new_uninit)]
 #![allow(non_snake_case)]
 
+use skyline::hooks::InlineCtx;
 use smash::lua2cpp::L2CFighterCommon;
-use smashline::{Hash40, L2CValue, LuaConst, StatusLine};
+use smashline::{Hash40, L2CFighterBase, L2CValue, LuaConst, StatusLine};
 
 pub mod api;
+mod callbacks;
 mod create_agent;
+mod nro_hook;
 mod static_accessor;
+
+#[smashline::line("mario", main)]
+fn mario_opff(fighter: &mut L2CFighterCommon) {
+    println!("Mario's opff!");
+}
+
+#[smashline::line("mario", check_attack)]
+fn mario_check_attack(
+    fighter: &mut L2CFighterCommon,
+    arg1: &mut smash::lib::L2CValue,
+    arg2: &mut smash::lib::L2CValue,
+) {
+    println!("Mario's check attack!");
+}
 
 #[smashline::status("mario", 0x1DC)]
 fn mario_neutral_b_main(fighter: &mut L2CFighterCommon) -> L2CValue {
@@ -133,10 +150,15 @@ pub fn main() {
     create_agent::install_create_agent_hooks();
     create_agent::install_create_agent_share_hooks();
     create_agent::install_status_create_agent_hooks();
-    mario_neutral_b_main::install();
-    mario_new_status_pre::install();
-    mario_new_status_main::install();
-    mario_new_status_end::install();
+    // mario_neutral_b_main::install();
+    // mario_new_status_pre::install();
+    // mario_new_status_main::install();
+    // mario_new_status_end::install();
+
+    mario_opff::install();
+    mario_check_attack::install();
+    nro_hook::install();
+    callbacks::install_callback_hooks();
 
     std::panic::set_hook(Box::new(|info| {
         let location = info.location().unwrap();
