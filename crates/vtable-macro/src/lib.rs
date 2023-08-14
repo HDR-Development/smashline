@@ -1,10 +1,13 @@
-
 use inflector::Inflector;
 use proc_macro::TokenStream as TS;
 use proc_macro2::Span;
 use proc_macro_crate::FoundCrate;
-use proc_macro_error::{abort, emit_warning, proc_macro_error, emit_error};
-use syn::{parse::Parse, punctuated::{Punctuated, Pair}, spanned::Spanned};
+use proc_macro_error::{abort, emit_error, emit_warning, proc_macro_error};
+use syn::{
+    parse::Parse,
+    punctuated::{Pair, Punctuated},
+    spanned::Spanned,
+};
 
 mod kw {
     syn::custom_keyword!(struct_name);
@@ -89,7 +92,7 @@ struct FunctionAttributes {
 impl FunctionAttributes {
     fn join(self, other: Self) -> Self {
         Self {
-            hidden: self.hidden | other.hidden
+            hidden: self.hidden | other.hidden,
         }
     }
 
@@ -112,9 +115,7 @@ impl Parse for FunctionAttributes {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let attrs = Punctuated::<FunctionAttribute, syn::Token![,]>::parse_terminated(input)?;
 
-        let mut this = Self {
-            hidden: false,
-        };
+        let mut this = Self { hidden: false };
 
         for attr in attrs.iter() {
             match attr {
@@ -144,44 +145,41 @@ fn ident_path(ident: syn::Ident) -> syn::Path {
     let mut path: Punctuated<syn::PathSegment, syn::token::Colon2> = Punctuated::new();
     let segment = syn::PathSegment {
         ident,
-        arguments: syn::PathArguments::None
+        arguments: syn::PathArguments::None,
     };
     path.push_value(segment);
 
     syn::Path {
         leading_colon: None,
-        segments: path
+        segments: path,
     }
 }
 
 fn make_ident_path(ident: &str, span: Span) -> syn::Path {
     ident_path(syn::Ident::new(ident, span))
-
 }
 
 fn map_to_bare_fn_arg(arg: &syn::FnArg, replace_self: Option<syn::Ident>) -> syn::BareFnArg {
     match arg {
-        syn::FnArg::Typed(typed) => {
-            syn::BareFnArg {
-                attrs: typed.attrs.clone(),
-                name: None,
-                ty: (*typed.ty).clone(),
-            }
+        syn::FnArg::Typed(typed) => syn::BareFnArg {
+            attrs: typed.attrs.clone(),
+            name: None,
+            ty: (*typed.ty).clone(),
         },
         syn::FnArg::Receiver(receiver) => {
-            let path = replace_self.map_or_else(|| make_ident_path("Self", receiver.self_token.span()), |ident| ident_path(ident));
+            let path = replace_self.map_or_else(
+                || make_ident_path("Self", receiver.self_token.span()),
+                |ident| ident_path(ident),
+            );
 
-            let self_path = syn::TypePath {
-                qself: None,
-                path
-            };
+            let self_path = syn::TypePath { qself: None, path };
 
             let ty = if let Some((and, _)) = receiver.reference.as_ref() {
                 let reference = syn::TypeReference {
                     and_token: and.clone(),
                     lifetime: None,
                     mutability: receiver.mutability.clone(),
-                    elem: Box::new(syn::Type::Path(self_path))
+                    elem: Box::new(syn::Type::Path(self_path)),
                 };
 
                 syn::Type::Reference(reference)
@@ -192,13 +190,16 @@ fn map_to_bare_fn_arg(arg: &syn::FnArg, replace_self: Option<syn::Ident>) -> syn
             syn::BareFnArg {
                 attrs: receiver.attrs.clone(),
                 name: None,
-                ty
+                ty,
             }
         }
     }
 }
 
-fn map_to_bare_fn(foreign: &syn::ForeignItemFn, replace_self: Option<syn::Ident>) -> syn::TypeBareFn {
+fn map_to_bare_fn(
+    foreign: &syn::ForeignItemFn,
+    replace_self: Option<syn::Ident>,
+) -> syn::TypeBareFn {
     // Ignore attrs + publicity
     let abi = syn::Abi {
         extern_token: syn::token::Extern(foreign.sig.fn_token.span()),
@@ -211,18 +212,26 @@ fn map_to_bare_fn(foreign: &syn::ForeignItemFn, replace_self: Option<syn::Ident>
         abi: Some(abi),
         fn_token: foreign.sig.fn_token.clone(),
         paren_token: foreign.sig.paren_token.clone(),
-        inputs: foreign.sig.inputs.pairs().map(|pair| match pair {
-            Pair::Punctuated(value, comma) => Pair::Punctuated(map_to_bare_fn_arg(value, replace_self.clone()), comma.clone()),
-            Pair::End(value) => Pair::End(map_to_bare_fn_arg(value, replace_self.clone()))
-        }).collect(),
+        inputs: foreign
+            .sig
+            .inputs
+            .pairs()
+            .map(|pair| match pair {
+                Pair::Punctuated(value, comma) => Pair::Punctuated(
+                    map_to_bare_fn_arg(value, replace_self.clone()),
+                    comma.clone(),
+                ),
+                Pair::End(value) => Pair::End(map_to_bare_fn_arg(value, replace_self.clone())),
+            })
+            .collect(),
         // TODO: Add support for variadics
         variadic: None,
-        output: foreign.sig.output.clone()
+        output: foreign.sig.output.clone(),
     }
 }
 
 fn map_to_struct_field(foreign: &syn::ForeignItemFn) -> syn::Field {
-    // warn on public 
+    // warn on public
     let attrs = match FunctionAttributes::collect_over_attrs(&foreign.attrs) {
         Ok(attr) => attr,
         Err(e) => {
@@ -233,9 +242,12 @@ fn map_to_struct_field(foreign: &syn::ForeignItemFn) -> syn::Field {
 
     if attrs.hidden {
         match &foreign.vis {
-            syn::Visibility::Inherited => {},
+            syn::Visibility::Inherited => {}
             other => {
-                emit_warning!(other.span(), "explicit visibility specifiers are ignored for hidden vtable methods");
+                emit_warning!(
+                    other.span(),
+                    "explicit visibility specifiers are ignored for hidden vtable methods"
+                );
             }
         }
     }
@@ -279,7 +291,7 @@ fn map_to_deref_method(foreign: &syn::ForeignItemFn) -> Option<syn::ItemFn> {
                 emit_error!(other.span(), "invalid argument name");
                 None
             }
-        }
+        },
     });
     let output = &foreign.sig.output;
 
@@ -289,14 +301,20 @@ fn map_to_deref_method(foreign: &syn::ForeignItemFn) -> Option<syn::ItemFn> {
             (self.#foreign_ident)(#(#input_idents),*)
         }
     })
-
 }
 
-fn map_to_getter(vtable_crate: syn::Ident, vtable_ident: syn::Ident, foreign: &syn::ForeignItemFn) -> syn::ItemFn {
+fn map_to_getter(
+    vtable_crate: syn::Ident,
+    vtable_ident: syn::Ident,
+    foreign: &syn::ForeignItemFn,
+) -> syn::ItemFn {
     let get_ident = quote::format_ident!("get_{}", foreign.sig.ident);
     let vis = &foreign.vis;
     let foreign_ident = &foreign.sig.ident;
-    let bare_fn = map_to_bare_fn(foreign, Some(syn::Ident::new("T", foreign.semi_token.span())));
+    let bare_fn = map_to_bare_fn(
+        foreign,
+        Some(syn::Ident::new("T", foreign.semi_token.span())),
+    );
     syn::parse_quote! {
         #vis fn #get_ident<T>(&self) -> #bare_fn
         where
@@ -309,11 +327,18 @@ fn map_to_getter(vtable_crate: syn::Ident, vtable_ident: syn::Ident, foreign: &s
     }
 }
 
-fn map_to_setter(vtable_crate: syn::Ident, vtable_ident: syn::Ident, foreign: &syn::ForeignItemFn) -> syn::ItemFn {
+fn map_to_setter(
+    vtable_crate: syn::Ident,
+    vtable_ident: syn::Ident,
+    foreign: &syn::ForeignItemFn,
+) -> syn::ItemFn {
     let set_ident = quote::format_ident!("set_{}", foreign.sig.ident);
     let vis = &foreign.vis;
     let foreign_ident = &foreign.sig.ident;
-    let bare_fn = map_to_bare_fn(foreign, Some(syn::Ident::new("T", foreign.semi_token.span())));
+    let bare_fn = map_to_bare_fn(
+        foreign,
+        Some(syn::Ident::new("T", foreign.semi_token.span())),
+    );
     syn::parse_quote! {
         #vis fn #set_ident<T>(&mut self, #foreign_ident: #bare_fn)
         where
@@ -352,7 +377,7 @@ pub fn vtable(attr: TS, input: TS) -> TS {
                     Ok(foreign) => foreign,
                     Err(e) => {
                         proc_macro_error::emit_error!(
-                            e.span(), 
+                            e.span(),
                             "'vtable' decorated modules only supported function and foreign function items"
                         );
                         continue;
@@ -389,9 +414,13 @@ pub fn vtable(attr: TS, input: TS) -> TS {
 
     let derefs = vtable_procs.iter().map(|proc| map_to_deref_method(proc));
 
-    let getters = vtable_procs.iter().map(|proc| map_to_getter(vtable_crate.clone(), vtable_name.clone(), proc));
+    let getters = vtable_procs
+        .iter()
+        .map(|proc| map_to_getter(vtable_crate.clone(), vtable_name.clone(), proc));
 
-    let setters = vtable_procs.iter().map(|proc| map_to_setter(vtable_crate.clone(), vtable_name.clone(), proc));
+    let setters = vtable_procs
+        .iter()
+        .map(|proc| map_to_setter(vtable_crate.clone(), vtable_name.clone(), proc));
 
     let accessor_trait = if attrs.has_type_info {
         quote::quote! {
@@ -439,5 +468,6 @@ pub fn vtable(attr: TS, input: TS) -> TS {
         }
 
         #accessor_trait
-    }.into()
+    }
+    .into()
 }

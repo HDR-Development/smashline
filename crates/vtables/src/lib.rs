@@ -110,7 +110,7 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
         vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
     };
 
-    if dbg!(needs_reloc) {
+    if needs_reloc {
         // Allocating zero bytes is undefined behavior, so just don't do it
         assert!(std::mem::size_of::<V>() > 0);
 

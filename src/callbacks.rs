@@ -1,7 +1,7 @@
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
 use smash::lib::L2CValue;
-use smashline::{Hash40, L2CFighterBase, StatusLine};
+use smashline::{Hash40, L2CFighterBase, StatusLine, Variadic};
 
 pub type Callback = extern "C" fn(&mut L2CFighterBase);
 pub type Callback1 = extern "C" fn(&mut L2CFighterBase, &mut L2CValue);
@@ -124,6 +124,9 @@ macro_rules! decl_functions {
             $(
                 crate::nro_hook::add_hook($offset, $code_cave, $name);
             )*
+            unsafe {
+                crate::nro_hook::add_normal_hook(0x3250, &mut ORIGINAL, call_line_status_hook as *const ());
+            }
         }
     }
 }
@@ -133,8 +136,8 @@ decl_functions! {
     call_pre_hook(Pre, 0x2560, 0x16086c) => call_callback;
     call_post_hook(Post, 0x31d4, 0x160884) => call_callback;
     call_post_hook2(Post, 0x321c, 0x1608a0) => call_callback;
-    call_main_hook(Main, 0x32a4, 0x1608bc) => call_callback;
-    call_main_hook2(Main, 0x32ec, 0x1608d4) => call_callback;
+    // call_main_hook(Main, 0x32a4, 0x1608bc) => call_callback;
+    // call_main_hook2(Main, 0x32ec, 0x1608d4) => call_callback;
     call_fix_camera_hook(FixCamera, 0x35e4, 0x1608ec) => call_callback;
     call_fix_camera_hook2(FixCamera, 0x362c, 0x160904) => call_callback;
     cal_map_correction_hook(MapCorrection, 0x36b4, 0x211afc) => call_callback;
@@ -153,4 +156,26 @@ decl_functions! {
     call_on_change_lr_hook(OnChangeLr, 0x1a77c, 0x1a7b0) => call_callback2;
     call_check_attack_hook(CheckAttack, 0x1ab30, 0x2aabf0) => call_callback2;
     call_check_damage_hook(CheckDamage, 0x1b414, 0x2aac08) => call_callback1
+}
+
+// main is handled differently so that we can call it after
+static mut ORIGINAL: *const () = std::ptr::null();
+
+unsafe fn call_line_status_hook(fighter: &mut L2CFighterBase, variadic: &mut Variadic, string: *const u8, va_list: u32) {
+    let callable: extern "C" fn(&mut L2CFighterBase, &mut Variadic, *const u8, u32) = std::mem::transmute(ORIGINAL);
+    callable(fighter, variadic, string, va_list);
+    let agent = crate::create_agent::agent_hash(fighter);
+    
+    let callbacks = CALLBACKS.read();
+    for callback in callbacks.iter() {
+        if let StatusCallbackFunction::Main(callback_fn) = callback.function {
+            if let Some(hash) = callback.hash {
+                if agent != hash {
+                    continue;
+                }
+            }
+
+            callback_fn(fighter);
+        }
+    }
 }

@@ -42,6 +42,7 @@ impl ScriptLine {
             "main" => ("Main", 0),
             "main_loop" => ("MainLoop", 0),
             "end" => ("End", 0),
+            "init" => ("Init", 0),
             "exec" => ("Exec", 0),
             "exec_stop" => ("ExecStop", 0),
             "post" => ("Post", 0),
@@ -122,7 +123,7 @@ impl Parse for StatusAttribute {
 }
 
 pub struct StatusAttributes {
-    agent: syn::Expr,
+    agent: Option<syn::Expr>,
     status: syn::Expr,
     line: Option<ScriptLine>,
 }
@@ -207,9 +208,15 @@ impl StatusAttributes {
             quote::quote!(#crate_tokens::IntoLuaConst::into_lua_const(#status))
         };
 
+        let agent = if let Some(agent) = agent.as_ref() {
+            quote::quote!(Some(#crate_tokens::AsHash40::as_hash40(#agent)))
+        } else {
+            quote::quote!(None)
+        };
+
         Ok(quote::quote! {
             ::smashline::api::#fn_name(
-                #crate_tokens::AsHash40::as_hash40(#agent),
+                #agent,
                 #luac,
                 #crate_tokens::StatusLine::#line_id,
                 #name,
@@ -233,10 +240,6 @@ impl StatusAttributes {
             }
         }
 
-        let Some(agent) = agent else {
-            return Err(syn::Error::new(input.span(), "agent must be provided"));
-        };
-
         let Some(status) = status else {
             return Err(syn::Error::new(input.span(), "status must be provided"));
         };
@@ -249,23 +252,38 @@ impl StatusAttributes {
     }
 
     fn parse_unnamed(input: ParseStream) -> syn::Result<Self> {
-        let agent: syn::Expr = input.parse()?;
-        let _: syn::Token![,] = input.parse()?;
-        let status: syn::Expr = input.parse()?;
-
-        let line = if input.peek(syn::token::Comma) {
+        let first: syn::Expr = input.parse()?;
+        if input.peek(syn::token::Comma) {
             let _: syn::Token![,] = input.parse()?;
-            let line: ScriptLine = input.parse()?;
-            Some(line)
-        } else {
-            None
-        };
+            if let Ok(line) = input.parse::<ScriptLine>() {
+                Ok(Self {
+                    agent: None,
+                    status: first,
+                    line: Some(line),
+                })
+            } else {
+                let status: syn::Expr = input.parse()?;
+                let line = if input.peek(syn::token::Comma) {
+                    let _: syn::Token![,] = input.parse()?;
+                    let line: ScriptLine = input.parse()?;
+                    Some(line)
+                } else {
+                    None
+                };
 
-        Ok(Self {
-            agent,
-            status,
-            line,
-        })
+                Ok(Self {
+                    agent: Some(first),
+                    status,
+                    line,
+                })
+            }
+        } else {
+            Ok(Self {
+                agent: None,
+                status: first,
+                line: None,
+            })
+        }
     }
 }
 

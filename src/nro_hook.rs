@@ -1,4 +1,5 @@
 use locks::RwLock;
+use skyline::hooks::A64HookFunction;
 
 extern "C" {
     #[link_name = "_ZN2nn2ro18LoadModuleInternalEPNS0_6ModuleEPKvPvmib"]
@@ -18,7 +19,14 @@ struct InlineHook {
     function: extern "C" fn(&mut skyline::hooks::InlineCtx),
 }
 
+struct Hook {
+    offset: usize,
+    original: &'static mut *const (),
+    function: *const (),
+}
+
 static HOOKS: RwLock<Vec<InlineHook>> = RwLock::new(Vec::new());
+static NORMAL_HOOKS: RwLock<Vec<Hook>> = RwLock::new(Vec::new());
 
 #[skyline::hook(replace = load_module_internal)]
 unsafe fn nro_hook(
@@ -43,6 +51,10 @@ unsafe fn nro_hook(
 
     if name != "common" {
         return result;
+    }
+
+    for hook in NORMAL_HOOKS.read().iter() {
+        A64HookFunction((hook.offset as u64 + (*module.ModuleObject).module_base) as _, hook.function as _, (hook.original as *const *const ()).cast_mut().cast());
     }
 
     for hook in HOOKS.read().iter() {
@@ -124,7 +136,7 @@ pub fn install() {
 pub fn add_hook(
     offset: usize,
     code_cave_offset: usize,
-    function: extern "C" fn(&skyline::hooks::InlineCtx),
+    function: unsafe extern "C" fn(&skyline::hooks::InlineCtx),
 ) {
     HOOKS.write().push(InlineHook {
         offset,
@@ -132,3 +144,16 @@ pub fn add_hook(
         function: unsafe { std::mem::transmute(function) },
     });
 }
+
+pub fn add_normal_hook(
+    offset: usize,
+    original: &'static mut *const (),
+    function: *const (),
+) {
+    NORMAL_HOOKS.write().push(Hook {
+        offset, 
+        original,
+        function
+    });
+}
+

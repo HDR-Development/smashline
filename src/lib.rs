@@ -97,115 +97,23 @@
 #![feature(new_uninit)]
 #![allow(non_snake_case)]
 
-use skyline::hooks::InlineCtx;
-use smash::lua2cpp::{L2CFighterCommon, L2CWeaponCommon};
-use smashline::{
-    skyline_smash::{
-        app::ArticleOperationTarget,
-        lib::lua_const::{ARTICLE_OPE_TARGET_ALL, FIGHTER_LUCINA_GENERATE_ARTICLE_MASK},
-    },
-    Hash40, L2CFighterBase, L2CValue, LuaConst, StatusLine,
-};
-
 pub mod api;
 mod callbacks;
 mod create_agent;
 mod nro_hook;
+mod state_callback;
 mod static_accessor;
-
-#[smashline::line("mario", main)]
-fn mario_opff(fighter: &mut L2CFighterCommon) {
-    println!("Mario's opff!");
-}
-
-#[smashline::line("mario", check_attack)]
-fn mario_check_attack(
-    fighter: &mut L2CFighterCommon,
-    arg1: &mut smash::lib::L2CValue,
-    arg2: &mut smash::lib::L2CValue,
-) {
-    println!("Mario's check attack!");
-}
-
-#[smashline::status("mario", 0x1DC)]
-fn mario_neutral_b_main(fighter: &mut L2CFighterCommon) -> L2CValue {
-    fighter.change_status(
-        smash::lib::L2CValue::new(0x1e3),
-        smash::lib::L2CValue::new(false),
-    );
-    smash::lib::L2CValue::new(0).into()
-}
-
-#[smashline::new_status("mario", 0x0)]
-fn mario_new_status_pre(fighter: &mut L2CFighterCommon) -> L2CValue {
-    smash::lib::L2CValue::new(0).into()
-}
-
-#[smashline::new_status("mario", 0x0)]
-fn mario_new_status_main(fighter: &mut L2CFighterCommon) -> L2CValue {
-    todo!()
-}
-
-#[smashline::new_status("mario", 0x0)]
-fn mario_new_status_end(fighter: &mut L2CFighterCommon) -> L2CValue {
-    smash::lib::L2CValue::new(0).into()
-}
-
-#[smashline::new_status("lucina_mask", 0x0)]
-fn mask_new_status_pre(weapon: &mut L2CWeaponCommon) -> L2CValue {
-    println!("Calling pre from lucina mask");
-    smash::lib::L2CValue::new(0).into()
-}
-
-#[smashline::new_status("lucina_mask", 0x0)]
-fn mask_new_status_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
-    println!("Calling main from lucina mask");
-    smash::lib::L2CValue::new(0).into()
-}
-
-#[smashline::new_status("lucina_mask", 0x0)]
-fn mask_new_status_end(weapon: &mut L2CWeaponCommon) -> L2CValue {
-    println!("Calling end from lucina mask");
-    smash::lib::L2CValue::new(0).into()
-}
-
-#[smashline::line("lucina", main)]
-fn main_status(fighter: &mut L2CFighterCommon) {
-    use smashline::skyline_smash::app::lua_bind::*;
-    unsafe {
-        if ArticleModule::is_exist(
-            fighter.module_accessor as _,
-            *FIGHTER_LUCINA_GENERATE_ARTICLE_MASK,
-        ) {
-            ArticleModule::change_status(
-                fighter.module_accessor as _,
-                *FIGHTER_LUCINA_GENERATE_ARTICLE_MASK,
-                0,
-                ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL),
-            );
-        }
-    }
-}
+mod unwind;
 
 #[skyline::main(name = "smashline-plugin")]
 pub fn main() {
     create_agent::install_create_agent_hooks();
     create_agent::install_create_agent_share_hooks();
     create_agent::install_status_create_agent_hooks();
-    // mario_neutral_b_main::install();
-    // mario_new_status_pre::install();
-    // mario_new_status_main::install();
-    // mario_new_status_end::install();
-
-    main_status::install();
-    mask_new_status_pre::install();
-    mask_new_status_main::install();
-    mask_new_status_end::install();
-
-    mario_opff::install();
-    mario_check_attack::install();
     nro_hook::install();
+    state_callback::install_state_callback_hooks();
     callbacks::install_callback_hooks();
+    unwind::install_unwind_patches();
 
     std::panic::set_hook(Box::new(|info| {
         let location = info.location().unwrap();

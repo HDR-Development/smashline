@@ -432,35 +432,11 @@ extern "C" fn wrap_deleter(agent: &mut L2CFighterWrapper) {
     }
 }
 
-extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
-    let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref());
-    let hash = data.hash;
-    let is_weapon = data.is_weapon;
-
-    let is_new = data.original_set_status_scripts.is_none();
-
-    if let Some(original) = data.original_set_status_scripts {
-        original(agent);
-    } else if is_weapon {
-        agent.as_weapon_mut().sub_weapon_common_settings();
-    } else {
-        agent.as_fighter_mut().sub_set_fighter_common_table();
-        agent.as_fighter_mut().sub_fighter_common_settings();
-    }
-
-    let statuses = STATUS_SCRIPTS.read();
-    let Some(list) = statuses.get(&hash) else {
-        return;
-    };
-
-    let old_total = if is_new {
-        0
-    } else {
-        agent.0.global_table.try_table().unwrap()[0xC]
-            .try_integer()
-            .unwrap_or_default() as i32
-    };
-
+fn install_status_scripts(
+    old_total: i32,
+    list: &[StatusScript],
+    agent: &mut L2CFighterWrapper,
+) -> i32 {
     let mut max_new = old_total;
     for status in list.iter() {
         let StatusScriptId::New(new) = &status.id else {
@@ -469,8 +445,6 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
 
         max_new = max_new.max(old_total + *new + 1);
     }
-
-    agent.0.global_table.try_table_mut().unwrap()[0xC] = smash::lib::L2CValue::new(max_new);
 
     for status in list.iter() {
         use StatusScriptFunction::*;
@@ -526,7 +500,7 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
                         $i(f) => {
                             let id = smash::lib::L2CValue::new(resolve_lua_const(&id));
                             let condition = smash::lib::L2CValue::new(StatusLine::$i as i32);
-                            let original_fn = agent.0.sv_get_status_func(&id, &condition).try_pointer().unwrap().cast();
+                            let original_fn = agent.0.sv_get_status_func(&id, &condition).try_pointer().unwrap_or(std::ptr::null_mut()).cast();
                             *original.write() = original_fn;
                             agent.0.sv_set_status_func(&id, &condition, unsafe { std::mem::transmute(f) })
                         },
@@ -555,6 +529,47 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
             CalcParam
         );
     }
+
+    max_new
+}
+
+extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
+    let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref());
+    let hash = data.hash;
+    let is_weapon = data.is_weapon;
+
+    let is_new = data.original_set_status_scripts.is_none();
+
+    if let Some(original) = data.original_set_status_scripts {
+        original(agent);
+    } else if is_weapon {
+        agent.as_weapon_mut().sub_weapon_common_settings();
+    } else {
+        agent.as_fighter_mut().sub_set_fighter_common_table();
+        agent.as_fighter_mut().sub_fighter_common_settings();
+    }
+
+    let statuses = STATUS_SCRIPTS.read();
+
+    let old_total = if is_new {
+        0
+    } else {
+        agent.0.global_table.try_table().unwrap()[0xC]
+            .try_integer()
+            .unwrap_or_default() as i32
+    };
+
+    let mut new_total = old_total;
+
+    if let Some(common) = statuses.get(&Hash40::new("common")) {
+        new_total = new_total.max(install_status_scripts(old_total, common, agent));
+    }
+
+    if let Some(common) = statuses.get(&hash) {
+        new_total = new_total.max(install_status_scripts(old_total, common, agent));
+    }
+
+    agent.0.global_table.try_table_mut().unwrap()[0xC] = smash::lib::L2CValue::new(new_total);
 }
 
 #[repr(transparent)]
@@ -662,7 +677,12 @@ fn create_agent_status_fighter(
 
     let wrapper: &'static mut L2CFighterWrapper = unsafe { std::mem::transmute(agent) };
 
-    let original_deleter = wrapper.vtable_accessor().get_deleter();
+    let original_deleter = if is_new {
+        None
+    } else {
+        Some(wrapper.vtable_accessor().get_deleter())
+    };
+
     let original_set_status_scripts = if is_new {
         None
     } else {
@@ -678,7 +698,7 @@ fn create_agent_status_fighter(
     data.hash = Hash40::new(name);
     data.kind = object.kind;
     data.is_weapon = false;
-    data.original_deleter = Some(original_deleter);
+    data.original_deleter = original_deleter;
     data.original_set_status_scripts = original_set_status_scripts;
 
     Some(unsafe { std::mem::transmute(wrapper) })
@@ -710,7 +730,12 @@ fn create_agent_status_weapon(
 
     let wrapper: &'static mut L2CFighterWrapper = unsafe { std::mem::transmute(agent) };
 
-    let original_deleter = wrapper.vtable_accessor().get_deleter();
+    let original_deleter = if is_new {
+        None
+    } else {
+        Some(wrapper.vtable_accessor().get_deleter())
+    };
+
     let original_set_status_scripts = if is_new {
         None
     } else {
@@ -726,7 +751,7 @@ fn create_agent_status_weapon(
     data.hash = Hash40::new(&format!("{owner_name}_{name}"));
     data.kind = object.kind;
     data.is_weapon = true;
-    data.original_deleter = Some(original_deleter);
+    data.original_deleter = original_deleter;
     data.original_set_status_scripts = original_set_status_scripts;
 
     Some(unsafe { std::mem::transmute(wrapper) })
