@@ -37,6 +37,13 @@ impl<T: FromArrayAddress> StaticArrayAccessor<T> {
         (index < self.count)
             .then(|| unsafe { T::from_address(text + self.offset + T::STRIDE * index) })
     }
+
+    pub fn iter(&self) -> StaticArrayIterator<T> {
+        StaticArrayIterator {
+            accessor: self,
+            current: 0
+        }
+    }
 }
 
 pub struct StaticArrayIterator<'a, T: FromArrayAddress> {

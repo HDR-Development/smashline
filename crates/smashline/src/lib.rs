@@ -7,7 +7,7 @@ pub use smashline_macro::*;
 #[cfg(all(not(feature = "smash-rs"), feature = "skyline_smash"))]
 pub use smash::{
     lib::{utility::Variadic, L2CValue},
-    lua2cpp::{L2CAgentBase, L2CFighterBase},
+    lua2cpp::{L2CAgentBase, L2CFighterBase, L2CWeaponCommon, L2CFighterCommon},
     phx::Hash40,
 };
 
@@ -18,7 +18,7 @@ pub use smash as skyline_smash;
 pub use smash_rs::{
     self,
     lib::{utility::Variadic, L2CValueHack as L2CValue},
-    lua2cpp::{L2CAgentBase, L2CFighterBase},
+    lua2cpp::{L2CAgentBase, L2CFighterBase, L2CWeaponCommon, L2CFighterCommon},
     phx::Hash40,
 };
 
@@ -296,6 +296,30 @@ decl_imports! {
         agent: Option<NonZeroU64>,
         event: ObjectEvent,
         callback: unsafe extern "C" fn(&mut L2CFighterBase)
+    );
+
+    fn smashline_clone_weapon(
+        original_owner: StringFFI,
+        original_name: StringFFI,
+        new_owner: StringFFI,
+        new_name: StringFFI,
+        use_original_code: bool
+    );
+}
+
+pub fn clone_weapon(
+    original_owner: impl Into<String>,
+    original_name: impl Into<String>,
+    new_owner: impl Into<String>,
+    new_name: impl Into<String>,
+    use_original_code: bool,
+) {
+    smashline_clone_weapon(
+        StringFFI::from_str(original_owner),
+        StringFFI::from_str(original_name),
+        StringFFI::from_str(new_owner),
+        StringFFI::from_str(new_name),
+        use_original_code
     );
 }
 

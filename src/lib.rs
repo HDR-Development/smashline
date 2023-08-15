@@ -97,13 +97,18 @@
 #![feature(new_uninit)]
 #![allow(non_snake_case)]
 
+mod cloning;
+
 pub mod api;
 mod callbacks;
 mod create_agent;
 mod nro_hook;
+mod params;
 mod state_callback;
 mod static_accessor;
 mod unwind;
+mod utils;
+
 
 #[skyline::main(name = "smashline-plugin")]
 pub fn main() {
@@ -114,6 +119,8 @@ pub fn main() {
     state_callback::install_state_callback_hooks();
     callbacks::install_callback_hooks();
     unwind::install_unwind_patches();
+    cloning::weapons::install();
+    params::install_param_hooks();
 
     std::panic::set_hook(Box::new(|info| {
         let location = info.location().unwrap();

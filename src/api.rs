@@ -2,13 +2,17 @@ use std::num::NonZeroU64;
 
 use rtld::Section;
 use smashline::{
-    Acmd, Hash40, L2CAgentBase, LuaConst, ObjectEvent, Priority, StatusLine, Variadic,
+    Acmd, Hash40, L2CAgentBase, LuaConst, ObjectEvent, Priority, StatusLine, StringFFI, Variadic,
 };
 
 use crate::{
     callbacks::{StatusCallback, StatusCallbackFunction},
-    create_agent::{AcmdScript, StatusScript, StatusScriptFunction, StatusScriptId},
-    state_callback::{StateCallback, StateCallbackFunction}, unwind::{MEMORY_REGIONS, MemoryRegionSearchKey},
+    create_agent::{
+        AcmdScript, StatusScript, StatusScriptFunction, StatusScriptId, LOWERCASE_FIGHTER_NAMES,
+        LOWERCASE_WEAPON_NAMES,
+    },
+    state_callback::{StateCallback, StateCallbackFunction},
+    unwind::{MemoryRegionSearchKey, MEMORY_REGIONS}, cloning::weapons::{NewAgent, NewArticle},
 };
 
 #[no_mangle]
@@ -33,7 +37,6 @@ pub extern "C" fn smashline_install_acmd_script(
         panic!();
     };
 
-    println!("{:#x?}", region);
     let mut current = region.start;
     let mut landing_pad = None;
     while current <= region.end {
@@ -123,4 +126,58 @@ pub extern "C" fn smashline_install_state_callback(
             event,
             function,
         });
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_clone_weapon(
+    original_owner: StringFFI,
+    original_name: StringFFI,
+    new_owner: StringFFI,
+    new_name: StringFFI,
+    use_original_code: bool
+) {
+    let original_owner = original_owner.as_str().unwrap().to_string();
+    let original_name = original_name.as_str().unwrap().to_string();
+    let new_owner = new_owner.as_str().unwrap().to_string();
+    let new_name = new_name.as_str().unwrap().to_string();
+
+    let original_owner_id = LOWERCASE_FIGHTER_NAMES
+        .iter()
+        .position(|name| name == original_owner)
+        .unwrap();
+
+    let original_name_id = LOWERCASE_WEAPON_NAMES
+        .iter()
+        .position(|name| name == original_name)
+        .unwrap();
+
+    let new_owner_id = LOWERCASE_FIGHTER_NAMES
+        .iter()
+        .position(|name| name == new_owner)
+        .unwrap();
+
+    crate::cloning::weapons::NEW_AGENTS
+        .write()
+        .entry(new_owner_id as i32)
+        .or_default()
+        .push(NewAgent {
+            old_owner_id: original_owner_id as i32,
+            owner_id: new_owner_id as i32,
+            owner_name_ffi: format!("{new_owner}\0"),
+            new_name_ffi: format!("{new_name}\0"),
+            owner_name: new_owner,
+            new_name,
+            old_name: original_name,
+            use_original_code
+        });
+
+    crate::cloning::weapons::NEW_ARTICLES
+        .write()
+        .entry(new_owner_id as i32)
+        .or_default()
+        .push(NewArticle {
+            original_owner: original_owner_id as i32,
+            weapon_id: original_name_id as i32
+        });
+
 }

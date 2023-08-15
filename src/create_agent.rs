@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut}, sync::atomic::{AtomicBool, Ordering}, time::Duration,
 };
 
 use skyline::hooks::InlineCtx;
@@ -19,7 +19,7 @@ use smashline::{
 };
 use vtables::VirtualClass;
 
-use crate::static_accessor::StaticArrayAccessor;
+use crate::{static_accessor::StaticArrayAccessor, cloning::weapons::IGNORE_NEW_AGENTS};
 
 #[allow(improper_ctypes)]
 extern "C" {
@@ -228,6 +228,103 @@ impl OriginalFunc {
     }
 }
 
+struct RecursionGuard(AtomicBool);
+
+impl RecursionGuard {
+    const fn new() -> Self {
+        RecursionGuard(AtomicBool::new(false))
+    }
+}
+
+struct RecursionStackGuard<'a>(&'a AtomicBool);
+
+impl<'a> Drop for RecursionStackGuard<'a> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+impl RecursionGuard {
+    fn acquire(&self) -> Option<RecursionStackGuard<'_>> {
+        if self.0.swap(true, Ordering::AcqRel) {
+            return None;
+        }
+
+        Some(RecursionStackGuard(&self.0))
+    }
+}
+
+impl Deref for L2CAnimcmdWrapper {
+    type Target = L2CAnimcmdWrapperVTable;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { std::mem::transmute(*(self as *const _ as *const *const u64)) }
+    }
+}
+
+impl DerefMut for L2CAnimcmdWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { std::mem::transmute(*(self as *mut _ as *mut *mut u64)) }
+    }
+}
+
+
+#[repr(transparent)]
+struct L2CAnimcmdWrapper(L2CAgentBase);
+
+#[derive(Default)]
+struct L2CAnimcmdWrapperData {
+    original_deleter: Option<extern "C" fn(&mut L2CAnimcmdWrapper)>,
+    additional_module: Option<i32>,
+}
+
+impl VirtualClass for L2CAnimcmdWrapper {
+    const DYNAMIC_MODULE: Option<&'static str> = Some("lu2cpp_common");
+    const VTABLE_OFFSET: usize = 0x800148;
+    const DISABLE_OFFSET_CHECK: bool = true;
+
+    type Accessor = L2CAnimcmdWrapperVTableAccessor;
+    type CustomData = L2CAnimcmdWrapperData;
+
+    fn vtable_accessor(&self) -> &Self::Accessor {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn vtable_accessor_mut(&mut self) -> &mut Self::Accessor {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+#[vtables::vtable]
+mod l2c_animcmd_wrapper {
+    fn destructor(&mut self);
+    fn deleter(&mut self);
+    fn coroutine_yield(&mut self);
+    fn start_coroutine(&mut self, coroutine_index: i32, name: Hash40, state: &mut i32) -> u32;
+    fn resume_coroutine(&mut self, coroutine_index: i32, state: &mut i32) -> u32;
+    fn get_unused_coroutine_index(&self, max: i32) -> i32;
+    fn clean_coroutine(&mut self, index: i32) -> bool;
+    fn set_coroutine_release_control(&mut self, release_control: bool);
+    fn is_coroutine_release_control(&self) -> bool;
+    fn added_function1(&self);
+    fn added_function2(&self);
+    fn added_function3(&self);
+}
+
+extern "C" fn wrap_deleter_animcmd(agent: &mut L2CAnimcmdWrapper) {
+    let data = vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(agent.deref());
+
+    let additional_fighter = data.additional_module;
+
+    if let Some(original) = data.original_deleter {
+        original(agent);
+    }
+
+    if let Some(additional_fighter) = additional_fighter {
+        crate::utils::unload_fighter_module(additional_fighter);
+    }
+}
+
 fn create_agent_hook(
     object: &mut BattleObject,
     boma: &mut BattleObjectModuleAccessor,
@@ -235,6 +332,11 @@ fn create_agent_hook(
     acmd: Acmd,
     original: OriginalFunc,
 ) -> Option<&'static mut L2CAgentBase> {
+    static RECURSION_GUARD: RecursionGuard = RecursionGuard::new();
+    let Some(_guard) = RECURSION_GUARD.acquire() else {
+        return original.call(object, boma, lua_state);
+    };
+
     let Some(category) = BattleObjectCategory::from_battle_object_id(object.battle_object_id)
     else {
         // TODO: Warn
@@ -300,24 +402,53 @@ fn create_agent_hook(
             Some(agent)
         }
         BattleObjectCategory::Weapon => {
-            let Some(name) = LOWERCASE_WEAPON_NAMES.get(object.kind as usize) else {
+            let Some(name) = crate::utils::get_weapon_name(object.kind) else {
                 // TODO: Warn
                 return original.call(object, boma, lua_state);
             };
 
-            let Some(owner) = LOWERCASE_WEAPON_OWNER_NAMES.get(object.kind as usize) else {
+            let Some(owner) = crate::utils::get_weapon_owner_name(object.kind) else {
                 // TODO: Warn
                 return original.call(object, boma, lua_state);
             };
 
-            let agent = if let Some(agent) = original.call(object, boma, lua_state) {
-                agent
+            let (agent, additional_module) = if let Some(agent) = original.call(object, boma, lua_state) {
+                (agent, None)
+            } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
+                crate::utils::load_fighter_module(fighter_id);
+                while !crate::utils::is_fighter_module_loaded(fighter_id) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+
+                IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
+                let result = original.call(object, boma, lua_state);
+                IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
+
+                if let Some(agent) = result {
+                    (agent, Some(fighter_id))
+                } else {
+                    let mut agent = Box::new(std::mem::MaybeUninit::zeroed());
+                    unsafe {
+                        fighter_animcmd_base_ctor(agent.as_mut_ptr(), object, boma, lua_state);
+                        (Box::leak(agent.assume_init()), None)
+                    }
+                }
             } else {
                 let mut agent = Box::new(std::mem::MaybeUninit::zeroed());
                 unsafe {
                     fighter_animcmd_base_ctor(agent.as_mut_ptr(), object, boma, lua_state);
-                    Box::leak(agent.assume_init())
+                    (Box::leak(agent.assume_init()), None)
                 }
+            };
+
+            let agent: &'static mut L2CAgentBase = unsafe {
+                let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
+                let deleter = wrapper.vtable_accessor_mut().get_deleter();
+                wrapper.vtable_accessor_mut().set_deleter(wrap_deleter_animcmd);
+                let data = vtables::vtable_custom_data_mut::<_, L2CAnimcmdWrapper>(wrapper.deref_mut());
+                data.additional_module = additional_module;
+                data.original_deleter = Some(deleter);
+                std::mem::transmute(wrapper)
             };
 
             let name = format!("{owner}_{name}");
@@ -423,12 +554,18 @@ fn resolve_lua_const(luac: &LuaConst) -> i32 {
 extern "C" fn wrap_deleter(agent: &mut L2CFighterWrapper) {
     let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref());
 
+    let additional_fighter = data.additional_fighter_module;
+
     if let Some(original) = data.original_deleter {
         original(agent);
     } else if data.is_weapon {
         drop(unsafe { Box::from_raw(agent.as_weapon_mut()) })
     } else {
         drop(unsafe { Box::from_raw(agent.as_fighter_mut()) })
+    }
+
+    if let Some(additional_fighter) = additional_fighter {
+        crate::utils::unload_fighter_module(additional_fighter);
     }
 }
 
@@ -614,6 +751,7 @@ struct L2CFighterWrapperData {
     kind: i32,
     hash: Hash40,
     is_weapon: bool,
+    additional_fighter_module: Option<i32>,
     original_deleter: Option<extern "C" fn(&mut L2CFighterWrapper)>,
     original_set_status_scripts: Option<extern "C" fn(&mut L2CFighterWrapper)>,
 }
@@ -710,21 +848,41 @@ fn create_agent_status_weapon(
     boma: &mut BattleObjectModuleAccessor,
     lua_state: *mut lua_State,
 ) -> Option<&'static mut L2CFighterBase> {
-    let Some(name) = LOWERCASE_WEAPON_NAMES.get(object.kind as usize) else {
+    let Some(name) = crate::utils::get_weapon_name(object.kind) else {
         return call_original!(object, boma, lua_state);
     };
 
-    let Some(owner_name) = LOWERCASE_WEAPON_OWNER_NAMES.get(object.kind as usize) else {
+    let Some(owner_name) = crate::utils::get_weapon_owner_name(object.kind) else {
         return call_original!(object, boma, lua_state);
     };
 
-    let (is_new, agent) = if let Some(agent) = call_original!(object, boma, lua_state) {
-        (false, agent)
+    let (is_new, agent, additional_fighter) = if let Some(agent) = call_original!(object, boma, lua_state) {
+        (false, agent, None)
+    } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
+        crate::utils::load_fighter_module(fighter_id);
+        while !crate::utils::is_fighter_module_loaded(fighter_id) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+
+        IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
+        let result = call_original!(object, boma, lua_state);
+        IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
+
+        if let Some(agent) = result {
+            (false, agent, Some(fighter_id))
+        } else {
+            crate::utils::unload_fighter_module(fighter_id);
+            let mut agent = Box::new(std::mem::MaybeUninit::zeroed());
+            unsafe {
+                weapon_common_ctor(agent.as_mut_ptr(), object, boma, lua_state);
+                (true, Box::leak(agent.assume_init()) as _, None)
+            }
+        }
     } else {
         let mut weapon = Box::new(std::mem::MaybeUninit::zeroed());
         unsafe {
             weapon_common_ctor(weapon.as_mut_ptr(), object, boma, lua_state);
-            (true, Box::leak(weapon.assume_init()) as _)
+            (true, Box::leak(weapon.assume_init()) as _, None)
         }
     };
 
@@ -752,6 +910,7 @@ fn create_agent_status_weapon(
     data.kind = object.kind;
     data.is_weapon = true;
     data.original_deleter = original_deleter;
+    data.additional_fighter_module = additional_fighter;
     data.original_set_status_scripts = original_set_status_scripts;
 
     Some(unsafe { std::mem::transmute(wrapper) })
