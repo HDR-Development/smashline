@@ -1,6 +1,8 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    ops::{Deref, DerefMut}, sync::atomic::{AtomicBool, Ordering}, time::Duration,
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
 };
 
 use skyline::hooks::InlineCtx;
@@ -19,7 +21,7 @@ use smashline::{
 };
 use vtables::VirtualClass;
 
-use crate::{static_accessor::StaticArrayAccessor, cloning::weapons::IGNORE_NEW_AGENTS};
+use crate::{cloning::weapons::IGNORE_NEW_AGENTS, static_accessor::StaticArrayAccessor};
 
 #[allow(improper_ctypes)]
 extern "C" {
@@ -268,7 +270,6 @@ impl DerefMut for L2CAnimcmdWrapper {
     }
 }
 
-
 #[repr(transparent)]
 struct L2CAnimcmdWrapper(L2CAgentBase);
 
@@ -314,9 +315,17 @@ mod l2c_animcmd_wrapper {
 extern "C" fn wrap_deleter_animcmd(agent: &mut L2CAnimcmdWrapper) {
     let data = vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(agent.deref());
 
+    let original_deleter = data.original_deleter;
     let additional_fighter = data.additional_module;
 
-    if let Some(original) = data.original_deleter {
+    let agent: &mut L2CAnimcmdWrapper = unsafe {
+        std::mem::transmute(vtables::vtable_restore_vtable::<
+            L2CAnimcmdWrapperVTable,
+            L2CAnimcmdWrapper,
+        >(std::mem::transmute(agent)))
+    };
+
+    if let Some(original) = original_deleter {
         original(agent);
     }
 
@@ -412,7 +421,9 @@ fn create_agent_hook(
                 return original.call(object, boma, lua_state);
             };
 
-            let (agent, additional_module) = if let Some(agent) = original.call(object, boma, lua_state) {
+            let (agent, additional_module) = if let Some(agent) =
+                original.call(object, boma, lua_state)
+            {
                 (agent, None)
             } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
                 crate::utils::load_fighter_module(fighter_id);
@@ -444,8 +455,11 @@ fn create_agent_hook(
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
                 let deleter = wrapper.vtable_accessor_mut().get_deleter();
-                wrapper.vtable_accessor_mut().set_deleter(wrap_deleter_animcmd);
-                let data = vtables::vtable_custom_data_mut::<_, L2CAnimcmdWrapper>(wrapper.deref_mut());
+                wrapper
+                    .vtable_accessor_mut()
+                    .set_deleter(wrap_deleter_animcmd);
+                let data =
+                    vtables::vtable_custom_data_mut::<_, L2CAnimcmdWrapper>(wrapper.deref_mut());
                 data.additional_module = additional_module;
                 data.original_deleter = Some(deleter);
                 std::mem::transmute(wrapper)
@@ -555,10 +569,19 @@ extern "C" fn wrap_deleter(agent: &mut L2CFighterWrapper) {
     let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref());
 
     let additional_fighter = data.additional_fighter_module;
+    let original_deleter = data.original_deleter;
+    let is_weapon = data.is_weapon;
 
-    if let Some(original) = data.original_deleter {
+    let agent: &mut L2CFighterWrapper = unsafe {
+        std::mem::transmute(vtables::vtable_restore_vtable::<
+            L2CFighterWrapperVTable,
+            L2CFighterWrapper,
+        >(std::mem::transmute(agent)))
+    };
+
+    if let Some(original) = original_deleter {
         original(agent);
-    } else if data.is_weapon {
+    } else if is_weapon {
         drop(unsafe { Box::from_raw(agent.as_weapon_mut()) })
     } else {
         drop(unsafe { Box::from_raw(agent.as_fighter_mut()) })
@@ -856,35 +879,36 @@ fn create_agent_status_weapon(
         return call_original!(object, boma, lua_state);
     };
 
-    let (is_new, agent, additional_fighter) = if let Some(agent) = call_original!(object, boma, lua_state) {
-        (false, agent, None)
-    } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
-        crate::utils::load_fighter_module(fighter_id);
-        while !crate::utils::is_fighter_module_loaded(fighter_id) {
-            std::thread::sleep(Duration::from_millis(1));
-        }
-
-        IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
-        let result = call_original!(object, boma, lua_state);
-        IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
-
-        if let Some(agent) = result {
-            (false, agent, Some(fighter_id))
-        } else {
-            crate::utils::unload_fighter_module(fighter_id);
-            let mut agent = Box::new(std::mem::MaybeUninit::zeroed());
-            unsafe {
-                weapon_common_ctor(agent.as_mut_ptr(), object, boma, lua_state);
-                (true, Box::leak(agent.assume_init()) as _, None)
+    let (is_new, agent, additional_fighter) =
+        if let Some(agent) = call_original!(object, boma, lua_state) {
+            (false, agent, None)
+        } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
+            crate::utils::load_fighter_module(fighter_id);
+            while !crate::utils::is_fighter_module_loaded(fighter_id) {
+                std::thread::sleep(Duration::from_millis(1));
             }
-        }
-    } else {
-        let mut weapon = Box::new(std::mem::MaybeUninit::zeroed());
-        unsafe {
-            weapon_common_ctor(weapon.as_mut_ptr(), object, boma, lua_state);
-            (true, Box::leak(weapon.assume_init()) as _, None)
-        }
-    };
+
+            IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
+            let result = call_original!(object, boma, lua_state);
+            IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
+
+            if let Some(agent) = result {
+                (false, agent, Some(fighter_id))
+            } else {
+                crate::utils::unload_fighter_module(fighter_id);
+                let mut agent = Box::new(std::mem::MaybeUninit::zeroed());
+                unsafe {
+                    weapon_common_ctor(agent.as_mut_ptr(), object, boma, lua_state);
+                    (true, Box::leak(agent.assume_init()) as _, None)
+                }
+            }
+        } else {
+            let mut weapon = Box::new(std::mem::MaybeUninit::zeroed());
+            unsafe {
+                weapon_common_ctor(weapon.as_mut_ptr(), object, boma, lua_state);
+                (true, Box::leak(weapon.assume_init()) as _, None)
+            }
+        };
 
     let wrapper: &'static mut L2CFighterWrapper = unsafe { std::mem::transmute(agent) };
 

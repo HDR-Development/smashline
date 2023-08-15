@@ -46,6 +46,7 @@ pub trait VirtualClass: 'static {
 struct VTableContext {
     magic: u64,
     type_id: TypeId,
+    old_vtable: *const (),
     data: Box<dyn Any>,
 }
 
@@ -131,6 +132,7 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
 
         let context = VTableContext {
             magic: CUSTOM_VTABLE_MAGIC,
+            old_vtable: *vtable as *const _ as *const (),
             type_id: std::any::TypeId::of::<T>(),
             data: Box::new(T::CustomData::default()),
         };
@@ -386,4 +388,79 @@ pub fn vtable_custom_data_mut<V, T: VirtualClass + DerefMut<Target = V>>(
     }
 
     context.storage_mut::<T>()
+}
+
+/// Method for mutably accessing custom data stores created for each vtable
+///
+/// See [`vtable_custom_data`] for more information regarding data access.
+#[track_caller]
+pub fn vtable_restore_vtable<'a, 'b, V, T: VirtualClass + DerefMut<Target = V>>(
+    vtable: &'a mut &'b mut V,
+) -> &'a mut &'b mut V {
+    let vtable_ptr = (*vtable as *mut V).cast::<u64>();
+
+    let needs_reloc = if T::DISABLE_OFFSET_CHECK {
+        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+            != rtld::MemoryState::DereferencableOutsideModule
+    } else {
+        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+    };
+
+    if needs_reloc {
+        panic!("vtable has not been relocated");
+    }
+
+    if !vtable_ptr.is_aligned() {
+        panic!("object vtable is not aligned");
+    }
+
+    // TODO: change null checks to checks if pointer is in mapped memory space
+    if vtable_ptr.is_null() {
+        panic!("object vtable is null");
+    }
+
+    let ctx = if <T::Accessor as VTableAccessor>::HAS_TYPE_INFO {
+        // SAFETY: Switch's memory space cannot go above isize::MAX so this will be fine
+        if unsafe { vtable_ptr.offset_from(std::ptr::null_mut()) } < 0x10 {
+            panic!("object vtable pointer is invalid")
+        }
+
+        // SAFETY: This is safe because we've ensured that the pointer is aligned properly
+        // and that it is not null, so this should not overflow
+        unsafe { vtable_ptr.sub(2) }.cast::<*mut VTableContext>()
+    } else {
+        // SAFETY: Same as above
+        unsafe { vtable_ptr.sub(1) }.cast::<*mut VTableContext>()
+    };
+
+    if ctx.is_null() {
+        panic!("vtable context ptr is null (this should be unreachable)");
+    }
+
+    // SAFETY: This is safe because we've already ensured above that it is not null
+    let context = unsafe { &mut **ctx };
+
+    if context.magic != CUSTOM_VTABLE_MAGIC {
+        panic!("vtable context is malformed (incorrect magic)");
+    }
+
+    // Allocating zero bytes is undefined behavior, so just don't do it
+    assert!(std::mem::size_of::<V>() > 0);
+
+    // Total size is at least size of the vtable + 8 for our context pointer
+    let mut total_size = std::mem::size_of::<V>() + 8;
+
+    // If we have type info, that's at vtable.sub(1) so we need to add an extra 8 bytes so we
+    // don't overwrite that
+    if <T::Accessor as VTableAccessor>::HAS_TYPE_INFO {
+        total_size += 8;
+    }
+
+    unsafe {
+        *vtable = std::mem::transmute(context.old_vtable);
+        drop(Box::from_raw(context));
+        std::alloc::dealloc(ctx.cast(), Layout::from_size_align(total_size, 0x8).unwrap());
+    }
+
+    vtable
 }

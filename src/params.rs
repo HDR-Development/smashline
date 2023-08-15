@@ -158,7 +158,7 @@ impl SmashlineParamDataAdapter {
 
         match data {
             ParamKind::Struct(data) => {
-                let (_, val) = data.0.iter().find(|(k, v)| k.0 == key)?;
+                let (_, val) = data.0.iter().find(|(k, _)| k.0 == key)?;
                 Some(SmashlineParamDataAdapter {
                     vtable: self.vtable,
                     data: Some(unsafe { &mut *(val as *const ParamKind).cast_mut() }),
@@ -170,7 +170,7 @@ impl SmashlineParamDataAdapter {
                     return None;
                 };
 
-                let (_, val) = data.0.iter().find(|(k, v)| k.0 == key)?;
+                let (_, val) = data.0.iter().find(|(k, _)| k.0 == key)?;
                 Some(SmashlineParamDataAdapter {
                     vtable: self.vtable,
                     data: Some(unsafe { &mut *(val as *const ParamKind).cast_mut() }),
@@ -233,6 +233,7 @@ impl SmashlineParamDataAdapter {
         }
     }
 
+    #[allow(improper_ctypes_definitions)]
     pub extern "C" fn stub(&self) -> [u64; 2] {
         [0, 0]
     }
