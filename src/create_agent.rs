@@ -836,6 +836,7 @@ fn create_agent_status_fighter(
         }
     };
 
+    // SAFETY: This is safe because L2CFighterWrapper's memory layout is transparent
     let wrapper: &'static mut L2CFighterWrapper = unsafe { std::mem::transmute(agent) };
 
     let original_deleter = if is_new {

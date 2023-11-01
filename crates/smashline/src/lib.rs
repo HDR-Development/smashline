@@ -305,6 +305,11 @@ decl_imports! {
         new_name: StringFFI,
         use_original_code: bool
     );
+
+    fn smashline_add_param_object(
+        fighter_name: StringFFI,
+        object: StringFFI
+    );
 }
 
 pub fn clone_weapon(
@@ -321,6 +326,10 @@ pub fn clone_weapon(
         StringFFI::from_str(new_name),
         use_original_code
     );
+}
+
+pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
+    smashline_add_param_object(StringFFI::from_str(fighter), StringFFI::from_str(object));
 }
 
 pub mod api {

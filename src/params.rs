@@ -1,11 +1,12 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, BTreeMap},
     sync::{
         atomic::{AtomicI32, Ordering},
         Arc,
     },
 };
 
+use locks::RwLock;
 use prc::ParamKind;
 use skyline::hooks::InlineCtx;
 use smashline::Hash40;
@@ -13,7 +14,9 @@ use vtables::{vtable, VirtualClass};
 
 use std::ops::{Deref, DerefMut};
 
-use crate::cloning::weapons::NEW_AGENTS;
+use crate::cloning::weapons::{NEW_AGENTS, NEW_ARTICLES, try_get_new_agent};
+
+pub static WHITELISTED_PARAMS: RwLock<BTreeMap<i32, Vec<Hash40>>> = RwLock::new(BTreeMap::new());
 
 #[vtable]
 mod param_data_adapter {
@@ -348,14 +351,21 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
     let mut allowed_names = vec![];
     let mut remap_names = HashMap::new();
 
-    if let Some(agents) = NEW_AGENTS.read().get(&fighter_id) {
-        for agent in agents.iter() {
-            allowed_names.push(Hash40::new(&format!("param_{}", agent.new_name)).0);
-            remap_names.insert(
-                Hash40::new(&format!("param_{}", agent.old_name)).0,
-                Hash40::new(&format!("param_{}", agent.new_name)).0,
-            );
-        }
+    let new_agents = NEW_AGENTS.read();
+    if let Some(new_articles) = NEW_ARTICLES.read().get(&fighter_id) {
+        for new_article in new_articles.iter() {
+            if let Some(agent) = try_get_new_agent(&new_agents, new_article.weapon_id, fighter_id) {
+                allowed_names.push(Hash40::new(&format!("param_{}", agent.new_name)).0);
+                remap_names.insert(
+                    Hash40::new(&format!("param_{}", agent.old_name)).0,
+                    Hash40::new(&format!("param_{}", agent.new_name)).0,
+                );
+            }
+        }       
+    }
+
+    if let Some(whitelist) = WHITELISTED_PARAMS.read().get(&fighter_id) {
+        allowed_names.extend(whitelist.iter().map(|x| x.0));
     }
 
     let check_key = |key: u64| allowed_names.contains(&key);

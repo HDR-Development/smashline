@@ -373,5 +373,6 @@ pub fn event(attr: TS, input: TS) -> TS {
                 #installer
             }
         }
-    }.into()
+    }
+    .into()
 }

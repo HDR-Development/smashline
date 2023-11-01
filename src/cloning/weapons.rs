@@ -134,20 +134,7 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     }
 }
 
-#[skyline::hook(offset = 0x6079b0)]
-fn fighter_initialize_object_data(
-    fighter: &mut BattleObject,
-    id: u32,
-    kind: i32,
-    entry_id: i32,
-    hash: Hash40,
-) {
-    CURRENT_OWNER_KIND.store(kind, Ordering::Relaxed);
 
-    call_original!(fighter, id, kind, entry_id, hash);
-
-    CURRENT_OWNER_KIND.store(-1, Ordering::Relaxed);
-}
 
 fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
     if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
@@ -250,5 +237,5 @@ pub fn install() {
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
     install_weapon_owner_name_hooks();
-    skyline::install_hooks!(get_static_fighter_data, fighter_initialize_object_data);
+    skyline::install_hooks!(get_static_fighter_data);
 }

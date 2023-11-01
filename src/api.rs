@@ -7,12 +7,16 @@ use smashline::{
 
 use crate::{
     callbacks::{StatusCallback, StatusCallbackFunction},
+    cloning::{
+        fighters::NewFighter,
+        weapons::{NewAgent, NewArticle},
+    },
     create_agent::{
         AcmdScript, StatusScript, StatusScriptFunction, StatusScriptId, LOWERCASE_FIGHTER_NAMES,
         LOWERCASE_WEAPON_NAMES,
     },
     state_callback::{StateCallback, StateCallbackFunction},
-    unwind::{MemoryRegionSearchKey, MEMORY_REGIONS}, cloning::weapons::{NewAgent, NewArticle},
+    unwind::{MemoryRegionSearchKey, MEMORY_REGIONS},
 };
 
 #[no_mangle]
@@ -129,12 +133,33 @@ pub extern "C" fn smashline_install_state_callback(
 }
 
 #[no_mangle]
+pub extern "C" fn smashline_clone_fighter(original_fighter: StringFFI, new_fighter: StringFFI) {
+    let original = original_fighter.as_str().unwrap();
+    let new = new_fighter.as_str().unwrap();
+
+    let base_id = LOWERCASE_FIGHTER_NAMES
+        .iter()
+        .position(|name| name == original)
+        .unwrap();
+
+    crate::cloning::fighters::NEW_FIGHTERS
+        .write()
+        .push(NewFighter {
+            base_id: base_id as i32,
+            fighter_kind_hash: Hash40::new(&format!("fighter_kind_{new}")),
+            name: new.to_string(),
+            name_ffi: format!("{new}\0"),
+            hash: Hash40::new(new),
+        });
+}
+
+#[no_mangle]
 pub extern "C" fn smashline_clone_weapon(
     original_owner: StringFFI,
     original_name: StringFFI,
     new_owner: StringFFI,
     new_name: StringFFI,
-    use_original_code: bool
+    use_original_code: bool,
 ) {
     let original_owner = original_owner.as_str().unwrap().to_string();
     let original_name = original_name.as_str().unwrap().to_string();
@@ -158,7 +183,7 @@ pub extern "C" fn smashline_clone_weapon(
 
     crate::cloning::weapons::NEW_AGENTS
         .write()
-        .entry(new_owner_id as i32)
+        .entry(original_name_id as i32)
         .or_default()
         .push(NewAgent {
             old_owner_id: original_owner_id as i32,
@@ -168,7 +193,7 @@ pub extern "C" fn smashline_clone_weapon(
             owner_name: new_owner,
             new_name,
             old_name: original_name,
-            use_original_code
+            use_original_code,
         });
 
     crate::cloning::weapons::NEW_ARTICLES
@@ -177,7 +202,6 @@ pub extern "C" fn smashline_clone_weapon(
         .or_default()
         .push(NewArticle {
             original_owner: original_owner_id as i32,
-            weapon_id: original_name_id as i32
+            weapon_id: original_name_id as i32,
         });
-
 }

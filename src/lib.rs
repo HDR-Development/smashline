@@ -97,11 +97,14 @@
 #![feature(new_uninit)]
 #![allow(non_snake_case)]
 
+use smashline::StringFFI;
+
 mod cloning;
 
 pub mod api;
 mod callbacks;
 mod create_agent;
+mod effects;
 mod nro_hook;
 mod params;
 mod state_callback;
@@ -109,9 +112,41 @@ mod static_accessor;
 mod unwind;
 mod utils;
 
+std::arch::global_asm!(
+    r#"
+    .section .nro_header
+    .global __nro_header_start
+    .word 0
+    .word _mod_header
+    .word 0
+    .word 0
+    
+    .section .rodata.module_name
+        .word 0
+        .word 9
+        .ascii "smashline"
+    .section .rodata.mod0
+    .global _mod_header
+    _mod_header:
+        .ascii "MOD0"
+        .word __dynamic_start - _mod_header
+        .word __bss_start - _mod_header
+        .word __bss_end - _mod_header
+        .word __eh_frame_hdr_start - _mod_header
+        .word __eh_frame_hdr_end - _mod_header
+        .word __nx_module_runtime - _mod_header // runtime-generated module object offset
+    .global IS_NRO
+    IS_NRO:
+        .word 1
+    
+    .section .bss.module_runtime
+    __nx_module_runtime:
+    .space 0xD0
+    "#
+);
 
-#[skyline::main(name = "smashline-plugin")]
-pub fn main() {
+#[no_mangle]
+pub extern "C" fn main() {
     create_agent::install_create_agent_hooks();
     create_agent::install_create_agent_share_hooks();
     create_agent::install_status_create_agent_hooks();
@@ -119,8 +154,9 @@ pub fn main() {
     state_callback::install_state_callback_hooks();
     callbacks::install_callback_hooks();
     unwind::install_unwind_patches();
-    cloning::weapons::install();
+    cloning::install();
     params::install_param_hooks();
+    effects::install_effect_transplant_hooks();
 
     std::panic::set_hook(Box::new(|info| {
         let location = info.location().unwrap();
