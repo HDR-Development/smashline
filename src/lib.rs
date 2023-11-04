@@ -97,14 +97,13 @@
 #![feature(new_uninit)]
 #![allow(non_snake_case)]
 
-use smashline::StringFFI;
-
 mod cloning;
 
 pub mod api;
 mod callbacks;
 mod create_agent;
 mod effects;
+mod interpreter;
 mod nro_hook;
 mod params;
 mod state_callback;

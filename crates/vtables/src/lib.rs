@@ -271,6 +271,28 @@ pub fn vtable_read_guard<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) {
     }
 }
 
+use thiserror::Error;
+#[derive(Error, Debug)]
+pub enum CustomDataAccessError {
+    #[error("Vtable has not been relocated")]
+    NotRelocated,
+
+    #[error("Vtable is not aligned")]
+    NotAligned,
+
+    #[error("Vtable is null")]
+    Null,
+
+    #[error("Vtable pointer is invalid")]
+    PointerInvalid,
+
+    #[error("Vtable context pointer is null")]
+    NullContext,
+
+    #[error("Vtable magic is invalid (malformed)")]
+    InvalidMagic,
+}
+
 /// Method for accessing custom data stores created for each vtable
 ///
 /// The storage is created when the vtable is relocated, along with other identifying
@@ -282,7 +304,9 @@ pub fn vtable_read_guard<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) {
 /// - The vtable has not already been relocated
 /// - The object is not an instance of `T`
 #[track_caller]
-pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) -> &T::CustomData {
+pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(
+    vtable: &V,
+) -> Result<&T::CustomData, CustomDataAccessError> {
     let vtable_ptr = (vtable as *const V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
@@ -293,22 +317,22 @@ pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) ->
     };
 
     if needs_reloc {
-        panic!("vtable has not been relocated");
+        return Err(CustomDataAccessError::NotRelocated);
     }
 
     if !vtable_ptr.is_aligned() {
-        panic!("object vtable is not aligned");
+        return Err(CustomDataAccessError::NotAligned);
     }
 
     // TODO: change null checks to checks if pointer is in mapped memory space
     if vtable_ptr.is_null() {
-        panic!("object vtable is null");
+        return Err(CustomDataAccessError::Null);
     }
 
     let ctx = if <T::Accessor as VTableAccessor>::HAS_TYPE_INFO {
         // SAFETY: Switch's memory space cannot go above isize::MAX so this will be fine
         if unsafe { vtable_ptr.offset_from(std::ptr::null_mut()) } < 0x10 {
-            panic!("object vtable pointer is invalid")
+            return Err(CustomDataAccessError::PointerInvalid);
         }
 
         // SAFETY: This is safe because we've ensured that the pointer is aligned properly
@@ -320,17 +344,17 @@ pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) ->
     };
 
     if ctx.is_null() {
-        panic!("vtable context ptr is null (this should be unreachable)");
+        return Err(CustomDataAccessError::NullContext);
     }
 
     // SAFETY: This is safe because we've already ensured above that it is not null
     let context = unsafe { &**ctx };
 
     if context.magic != CUSTOM_VTABLE_MAGIC {
-        panic!("vtable context is malformed (incorrect magic)");
+        return Err(CustomDataAccessError::InvalidMagic);
     }
 
-    context.storage::<T>()
+    Ok(context.storage::<T>())
 }
 
 /// Method for mutably accessing custom data stores created for each vtable
@@ -459,7 +483,10 @@ pub fn vtable_restore_vtable<'a, 'b, V, T: VirtualClass + DerefMut<Target = V>>(
     unsafe {
         *vtable = std::mem::transmute(context.old_vtable);
         drop(Box::from_raw(context));
-        std::alloc::dealloc(ctx.cast(), Layout::from_size_align(total_size, 0x8).unwrap());
+        std::alloc::dealloc(
+            ctx.cast(),
+            Layout::from_size_align(total_size, 0x8).unwrap(),
+        );
     }
 
     vtable

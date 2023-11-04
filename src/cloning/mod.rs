@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 use smash::app::BattleObject;
 use smashline::Hash40;
 
+#[allow(dead_code)]
 pub mod fighters;
 pub mod weapons;
 

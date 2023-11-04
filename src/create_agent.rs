@@ -1,10 +1,14 @@
 use std::{
     collections::{BTreeMap, HashMap},
     ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
+use acmd_engine::SmashlineScript;
 use skyline::hooks::InlineCtx;
 use smash::{
     app::{BattleObject, BattleObjectModuleAccessor},
@@ -16,12 +20,15 @@ use smash::{
     lua_State,
 };
 use smashline::{
-    locks::RwLock, Acmd, BattleObjectCategory, Hash40, L2CAgentBase, L2CFighterBase, L2CValue,
-    LuaConst, Priority, StatusLine, Variadic,
+    locks::RwLock, Acmd, AsHash40, BattleObjectCategory, Hash40, L2CAgentBase, L2CFighterBase,
+    L2CValue, Priority, StatusLine, Variadic,
 };
-use vtables::VirtualClass;
+use vtables::{CustomDataAccessError, VirtualClass};
 
-use crate::{cloning::weapons::IGNORE_NEW_AGENTS, static_accessor::StaticArrayAccessor};
+use crate::{
+    cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
+    static_accessor::StaticArrayAccessor,
+};
 
 #[allow(improper_ctypes)]
 extern "C" {
@@ -86,14 +93,6 @@ type StatusFunc = Option<extern "C" fn(&mut L2CFighterBase) -> L2CValue>;
 type StatusFunc1 = Option<extern "C" fn(&mut L2CFighterBase, L2CValue) -> L2CValue>;
 type StatusFunc2 = Option<extern "C" fn(&mut L2CFighterBase, L2CValue, L2CValue) -> L2CValue>;
 
-pub enum StatusScriptId {
-    Replace {
-        id: LuaConst,
-        original: &'static RwLock<*const ()>,
-    },
-    New(i32),
-}
-
 #[derive(Copy, Clone)]
 pub enum StatusScriptFunction {
     Pre(StatusFunc),
@@ -144,13 +143,13 @@ impl StatusScriptFunction {
 }
 
 pub struct StatusScript {
-    pub id: StatusScriptId,
+    pub id: i32,
     pub function: StatusScriptFunction,
 }
 
 #[derive(Copy, Clone)]
 pub struct AcmdScript {
-    pub function: extern "C" fn(&mut L2CAgentBase, &mut Variadic),
+    pub function: unsafe extern "C" fn(&mut L2CAgentBase),
     pub priority: Priority,
 }
 
@@ -273,10 +272,21 @@ impl DerefMut for L2CAnimcmdWrapper {
 #[repr(transparent)]
 struct L2CAnimcmdWrapper(L2CAgentBase);
 
+extern "C" fn unreachable_smashline_script(_fighter: &mut L2CAgentBase, _variadic: &mut Variadic) {
+    panic!("unreachable smashline script called, this is an implementation error");
+}
+
+pub enum UserScript {
+    Function(unsafe extern "C" fn(&mut L2CAgentBase)),
+    Script(Arc<locks::RwLock<Arc<SmashlineScript>>>),
+}
+
 #[derive(Default)]
 struct L2CAnimcmdWrapperData {
     original_deleter: Option<extern "C" fn(&mut L2CAnimcmdWrapper)>,
     additional_module: Option<i32>,
+    user_scripts: HashMap<Hash40, UserScript>,
+    loaded_script_arc: Option<Arc<Vec<LoadedScript>>>,
 }
 
 impl VirtualClass for L2CAnimcmdWrapper {
@@ -313,7 +323,7 @@ mod l2c_animcmd_wrapper {
 }
 
 extern "C" fn wrap_deleter_animcmd(agent: &mut L2CAnimcmdWrapper) {
-    let data = vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(agent.deref());
+    let data = vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(agent.deref()).unwrap();
 
     let original_deleter = data.original_deleter;
     let additional_fighter = data.additional_module;
@@ -398,15 +408,45 @@ fn create_agent_hook(
 
             let hash = Hash40::new(name);
 
+            let mut user_scripts = HashMap::new();
+
+            let smashline_scripts = crate::interpreter::get_or_load_scripts(name, None);
+            for script in smashline_scripts
+                .iter()
+                .filter(|script| acmd == script.script.read().category)
+            {
+                user_scripts.insert(
+                    script.script.read().replace.as_hash40(),
+                    UserScript::Script(script.script.clone()),
+                );
+            }
+
             let acmd_scripts = ACMD_SCRIPTS.read();
             if let Some(scripts) = acmd_scripts.get(&hash) {
                 for (hash, script) in scripts.get_scripts(acmd) {
                     agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(script.function) },
+                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
                         *hash,
                     );
+
+                    user_scripts.insert(*hash, UserScript::Function(script.function));
                 }
             }
+
+            let agent: &'static mut L2CAgentBase = unsafe {
+                let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
+                let deleter = wrapper.vtable_accessor_mut().get_deleter();
+                wrapper
+                    .vtable_accessor_mut()
+                    .set_deleter(wrap_deleter_animcmd);
+                let data =
+                    vtables::vtable_custom_data_mut::<_, L2CAnimcmdWrapper>(wrapper.deref_mut());
+                data.additional_module = None;
+                data.original_deleter = Some(deleter);
+                data.user_scripts = user_scripts;
+                data.loaded_script_arc = Some(smashline_scripts);
+                std::mem::transmute(wrapper)
+            };
 
             Some(agent)
         }
@@ -452,6 +492,35 @@ fn create_agent_hook(
                 }
             };
 
+            let qualified_name = format!("{owner}_{name}");
+
+            let hash = Hash40::new(&qualified_name);
+
+            let mut user_scripts = HashMap::new();
+
+            let smashline_scripts = crate::interpreter::get_or_load_scripts(&owner, Some(&name));
+            for script in smashline_scripts
+                .iter()
+                .filter(|script| acmd == script.script.read().category)
+            {
+                user_scripts.insert(
+                    script.script.read().replace.as_hash40(),
+                    UserScript::Script(script.script.clone()),
+                );
+            }
+
+            let acmd_scripts = ACMD_SCRIPTS.read();
+            if let Some(scripts) = acmd_scripts.get(&hash) {
+                for (hash, script) in scripts.get_scripts(acmd) {
+                    agent.sv_set_function_hash(
+                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
+                        *hash,
+                    );
+
+                    user_scripts.insert(*hash, UserScript::Function(script.function));
+                }
+            }
+
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
                 let deleter = wrapper.vtable_accessor_mut().get_deleter();
@@ -462,22 +531,10 @@ fn create_agent_hook(
                     vtables::vtable_custom_data_mut::<_, L2CAnimcmdWrapper>(wrapper.deref_mut());
                 data.additional_module = additional_module;
                 data.original_deleter = Some(deleter);
+                data.user_scripts = user_scripts;
+                data.loaded_script_arc = Some(smashline_scripts);
                 std::mem::transmute(wrapper)
             };
-
-            let name = format!("{owner}_{name}");
-
-            let hash = Hash40::new(&name);
-
-            let acmd_scripts = ACMD_SCRIPTS.read();
-            if let Some(scripts) = acmd_scripts.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(script.function) },
-                        *hash,
-                    );
-                }
-            }
 
             Some(agent)
         }
@@ -535,38 +592,8 @@ macro_rules! create_agent_hook {
     };
 }
 
-fn resolve_lua_const(luac: &LuaConst) -> i32 {
-    extern "C" {
-        #[link_name = "_ZN3lib18lua_bind_get_valueIiEEbmRT_"]
-        fn get_lua_int(hash: u64, val: &mut i32);
-    }
-
-    match luac {
-        LuaConst::Resolved(val) => *val,
-        LuaConst::UnresolvedHash(hash) => {
-            let mut val = 0;
-            unsafe {
-                get_lua_int(*hash, &mut val);
-            }
-
-            val
-        }
-        LuaConst::UnresolvedStr(name) => {
-            let name = name.as_str().unwrap();
-            let hash = lua_bind_hash::lua_bind_hash_str(name);
-
-            let mut val = 0;
-            unsafe {
-                get_lua_int(hash, &mut val);
-            }
-
-            val
-        }
-    }
-}
-
 extern "C" fn wrap_deleter(agent: &mut L2CFighterWrapper) {
-    let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref());
+    let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref()).unwrap();
 
     let additional_fighter = data.additional_fighter_module;
     let original_deleter = data.original_deleter;
@@ -599,69 +626,18 @@ fn install_status_scripts(
 ) -> i32 {
     let mut max_new = old_total;
     for status in list.iter() {
-        let StatusScriptId::New(new) = &status.id else {
-            continue;
-        };
-
-        max_new = max_new.max(old_total + *new + 1);
+        max_new = max_new.max(status.id);
     }
-
     for status in list.iter() {
         use StatusScriptFunction::*;
-        let StatusScriptId::New(new) = &status.id else {
-            continue;
-        };
 
         macro_rules! set {
             ($($i:ident),*) => {
                 match status.function {
                     $(
                         $i(f) => {
-                            let id = smash::lib::L2CValue::new(old_total + *new);
+                            let id = smash::lib::L2CValue::new(status.id);
                             let condition = smash::lib::L2CValue::new(StatusLine::$i as i32);
-                            agent.0.sv_set_status_func(&id, &condition, unsafe { std::mem::transmute(f) })
-                        },
-                    )*
-                }
-            }
-        }
-
-        set!(
-            Pre,
-            Main,
-            End,
-            Init,
-            Exec,
-            ExecStop,
-            Post,
-            Exit,
-            MapCorrection,
-            FixCamera,
-            FixPosSlow,
-            CheckDamage,
-            CheckAttack,
-            OnChangeLr,
-            LeaveStop,
-            NotifyEventGimmick,
-            CalcParam
-        );
-    }
-
-    for status in list.iter() {
-        use StatusScriptFunction::*;
-        let StatusScriptId::Replace { id, original } = &status.id else {
-            continue;
-        };
-
-        macro_rules! set {
-            ($($i:ident),*) => {
-                match status.function {
-                    $(
-                        $i(f) => {
-                            let id = smash::lib::L2CValue::new(resolve_lua_const(&id));
-                            let condition = smash::lib::L2CValue::new(StatusLine::$i as i32);
-                            let original_fn = agent.0.sv_get_status_func(&id, &condition).try_pointer().unwrap_or(std::ptr::null_mut()).cast();
-                            *original.write() = original_fn;
                             agent.0.sv_set_status_func(&id, &condition, unsafe { std::mem::transmute(f) })
                         },
                     )*
@@ -694,7 +670,7 @@ fn install_status_scripts(
 }
 
 extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
-    let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref());
+    let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref()).unwrap();
     let hash = data.hash;
     let is_weapon = data.is_weapon;
 
@@ -941,9 +917,20 @@ fn create_agent_status_weapon(
     Some(unsafe { std::mem::transmute(wrapper) })
 }
 
+pub(crate) fn user_scripts<'a>(agent: &'a L2CAgentBase) -> Option<&HashMap<Hash40, UserScript>> {
+    let wrapper: &'static L2CAnimcmdWrapper = unsafe { std::mem::transmute(agent) };
+    match vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(wrapper.deref()) {
+        Ok(data) => Some(&data.user_scripts),
+        Err(CustomDataAccessError::NotRelocated) => None,
+        Err(e) => panic!("failed to get data scripts: {e}"),
+    }
+}
+
 pub(crate) fn agent_hash(fighter: &L2CFighterBase) -> Hash40 {
     let wrapper: &'static L2CFighterWrapper = unsafe { std::mem::transmute(fighter) };
-    vtables::vtable_custom_data::<_, L2CFighterWrapper>(wrapper.deref()).hash
+    vtables::vtable_custom_data::<_, L2CFighterWrapper>(wrapper.deref())
+        .unwrap()
+        .hash
 }
 
 #[skyline::hook(offset = 0x33b5b80, inline)]
@@ -964,7 +951,7 @@ create_agent_hook! {
     0x64c2f0 => (Game, fighter);
     0x64c910 => (Effect, fighter);
     0x64cf30 => (Expression, fighter);
-    0x65d550 => (Sound, fighter);
+    0x64d550 => (Sound, fighter);
     0x33ac3b0 => (Game, weapon);
     0x33ad310 => (Effect, weapon);
     0x33ae270 => (Sound, weapon);

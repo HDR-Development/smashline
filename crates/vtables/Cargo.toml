@@ -12,3 +12,4 @@ repository.workspace = true
 rtld.path = "../rtld"
 skyline.workspace = true
 vtable-macro.path = "../vtable-macro"
+thiserror = "1"

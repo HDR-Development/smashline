@@ -2,9 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
-use smash::app::BattleObject;
 use smashline::Hash40;
-
 
 static FIGHTER_CLONES: RwLock<[Option<Hash40>; 8]> = RwLock::new([None; 8]);
 
@@ -25,14 +23,12 @@ pub struct FighterSelectionInfo {
     pub costume_slot: i32,
     pub css_entry: i32,
     pub mii_related: [i32; 4],
-    pub flags: [u8; 4]
+    pub flags: [u8; 4],
 }
 
 // Very important structure !
 #[repr(C)]
-pub struct SelectedFighterInfo {
-
-}
+pub struct SelectedFighterInfo {}
 
 pub struct NewFighter {
     pub base_id: i32,
@@ -51,7 +47,10 @@ fn lookup_fighter_kind_from_ui_hash(database: u64, hash: u64) -> i32;
 unsafe fn set_current_player_id(ctx: &mut InlineCtx) {
     CURRENT_PLAYER_ID.store(*ctx.registers[21].x.as_ref() as usize, Ordering::Relaxed);
 
-    let result = lookup_fighter_kind_from_ui_hash(*ctx.registers[0].x.as_ref(), *ctx.registers[1].x.as_ref());
+    let result = lookup_fighter_kind_from_ui_hash(
+        *ctx.registers[0].x.as_ref(),
+        *ctx.registers[1].x.as_ref(),
+    );
 
     CURRENT_PLAYER_ID.store(usize::MAX, Ordering::Relaxed);
 
@@ -95,13 +94,13 @@ unsafe fn update_selected_fighter(arg: u64, id: u32, info: *const u32) {
 #[skyline::hook(offset = 0x64f884, inline)]
 unsafe fn initialize_ai(ctx: &InlineCtx) {
     let fighter = *ctx.registers[21].x.as_ref() as *const i32;
-    let kind = *fighter.add(0x74 / 4);
+    let _kind = *fighter.add(0x74 / 4);
     let entry_id = *fighter.add(0x2);
     CURRENT_PLAYER_ID.store(entry_id as usize, Ordering::Relaxed);
 }
 
 #[skyline::hook(offset = 0x64f894, inline)]
-unsafe fn finish_ai(ctx: &InlineCtx) {
+unsafe fn finish_ai(_ctx: &InlineCtx) {
     CURRENT_PLAYER_ID.store(usize::MAX, Ordering::Relaxed);
 }
 

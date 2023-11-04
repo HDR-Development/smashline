@@ -4,10 +4,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub use smashline_macro::*;
 
+mod builder;
+
+pub use builder::*;
+
 #[cfg(all(not(feature = "smash-rs"), feature = "skyline_smash"))]
 pub use smash::{
     lib::{utility::Variadic, L2CValue},
-    lua2cpp::{L2CAgentBase, L2CFighterBase, L2CWeaponCommon, L2CFighterCommon},
+    lua2cpp::{L2CAgentBase, L2CFighterBase, L2CFighterCommon, L2CWeaponCommon},
     phx::Hash40,
 };
 
@@ -18,7 +22,7 @@ pub use smash as skyline_smash;
 pub use smash_rs::{
     self,
     lib::{utility::Variadic, L2CValueHack as L2CValue},
-    lua2cpp::{L2CAgentBase, L2CFighterBase, L2CWeaponCommon, L2CFighterCommon},
+    lua2cpp::{L2CAgentBase, L2CFighterBase, L2CFighterCommon, L2CWeaponCommon},
     phx::Hash40,
 };
 
@@ -33,6 +37,7 @@ pub enum Priority {
 }
 
 #[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub enum Acmd {
     Game,
     Effect,
@@ -40,7 +45,20 @@ pub enum Acmd {
     Expression,
 }
 
+impl PartialEq<acmd_engine::asset::Category> for Acmd {
+    fn eq(&self, other: &acmd_engine::asset::Category) -> bool {
+        use acmd_engine::asset::Category;
+        match other {
+            Category::Effect => matches!(self, Acmd::Effect),
+            Category::Game => matches!(self, Acmd::Game),
+            Category::Sound => matches!(self, Acmd::Sound),
+            Category::Expression => matches!(self, Acmd::Expression),
+        }
+    }
+}
+
 #[repr(i32)]
+#[derive(Copy, Clone)]
 pub enum StatusLine {
     Pre,
     Main,
@@ -252,32 +270,28 @@ macro_rules! decl_imports {
 }
 
 decl_imports! {
+    fn smashline_reload_script(fighter: StringFFI, weapon: StringFFI, file_name: StringFFI);
+
+    fn smashline_get_action_registry() -> &'static acmd_engine::action::ActionRegistry;
+
     fn smashline_install_acmd_script(
         agent: Hash40,
         script: Hash40,
         category: Acmd,
         priority: Priority,
-        function: unsafe extern "C" fn(&mut L2CAgentBase, &mut Variadic)
+        function: unsafe extern "C" fn(&mut L2CAgentBase)
     );
 
     fn smashline_install_status_script(
         agent: Option<NonZeroU64>,
-        status: LuaConst,
-        line: StatusLine,
-        function: *const (),
-        original: &'static locks::RwLock<*const ()>
-    );
-
-    fn smashline_install_new_status_script(
-        agent: Option<NonZeroU64>,
-        id: i32,
+        status: i32,
         line: StatusLine,
         function: *const ()
     );
 
     fn smashline_install_line_callback(
         agent: Option<NonZeroU64>,
-        line: i32,
+        line: StatusLine,
         callback: *const ()
     );
 
@@ -295,7 +309,7 @@ decl_imports! {
     fn smashline_install_state_callback(
         agent: Option<NonZeroU64>,
         event: ObjectEvent,
-        callback: unsafe extern "C" fn(&mut L2CFighterBase)
+        callback: *const ()
     );
 
     fn smashline_clone_weapon(
@@ -324,7 +338,7 @@ pub fn clone_weapon(
         StringFFI::from_str(original_name),
         StringFFI::from_str(new_owner),
         StringFFI::from_str(new_name),
-        use_original_code
+        use_original_code,
     );
 }
 
@@ -334,19 +348,13 @@ pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
 
 pub mod api {
     use super::*;
-    use std::ops::DerefMut;
-
-    #[cfg(not(feature = "smash-rs"))]
-    use skyline_smash::lib::L2CValue as LocalL2CValue;
-
-    #[cfg(feature = "smash-rs")]
-    use smash_rs::lib::L2CValue as LocalL2CValue;
 
     #[cfg(all(not(feature = "smash-rs"), feature = "skyline_smash"))]
     fn extract_hash(hash: Hash40) -> u64 {
         hash.hash
     }
 
+    use acmd_engine::action::Action;
     #[cfg(feature = "skyline_smash")]
     pub use smash as skyline_smash;
 
@@ -355,161 +363,41 @@ pub mod api {
         hash.0
     }
 
+    pub fn reload_script(fighter: &str, weapon: Option<&str>, file: &str) {
+        smashline_reload_script(
+            StringFFI::from_str(fighter),
+            StringFFI::from_str(weapon.unwrap_or("")),
+            StringFFI::from_str(file),
+        );
+    }
+
+    pub fn register_action<A: Action>() {
+        smashline_get_action_registry().register::<A>();
+    }
+
+    pub fn install_status_script(
+        agent: Option<Hash40>,
+        line: StatusLine,
+        kind: i32,
+        function: *const (),
+    ) {
+        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
+        smashline_install_status_script(agent, kind, line, function);
+    }
+
+    pub fn install_line_callback(agent: Option<Hash40>, line: StatusLine, function: *const ()) {
+        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
+        smashline_install_line_callback(agent, line, function);
+    }
+
     pub fn install_acmd_script(
         agent: Hash40,
         script: Hash40,
         category: Acmd,
         priority: Priority,
-        function: unsafe extern "C" fn(&mut L2CAgentBase, &mut Variadic),
+        function: unsafe extern "C" fn(&mut L2CAgentBase),
     ) {
         smashline_install_acmd_script(agent, script, category, priority, function);
-    }
-
-    pub fn install_basic_new_status_script<T>(
-        agent: Option<Hash40>,
-        status: i32,
-        line: StatusLine,
-        function: unsafe extern "C" fn(&mut T) -> L2CValue,
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
-        unsafe {
-            smashline_install_new_status_script(agent, status, line, std::mem::transmute(function));
-        }
-    }
-
-    pub fn install_one_arg_new_status_script<T>(
-        agent: Option<Hash40>,
-        status: i32,
-        line: StatusLine,
-        function: unsafe extern "C" fn(&mut T, L2CValue) -> L2CValue,
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
-        unsafe {
-            smashline_install_new_status_script(agent, status, line, std::mem::transmute(function));
-        }
-    }
-
-    pub fn install_two_arg_new_status_script<T>(
-        agent: Option<Hash40>,
-        status: i32,
-        line: StatusLine,
-        function: unsafe extern "C" fn(&mut T, L2CValue, L2CValue) -> L2CValue,
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
-        unsafe {
-            smashline_install_new_status_script(agent, status, line, std::mem::transmute(function));
-        }
-    }
-
-    pub fn install_basic_status_script<T>(
-        agent: Option<Hash40>,
-        status: LuaConst,
-        line: StatusLine,
-        function: unsafe extern "C" fn(&mut T) -> L2CValue,
-        original: &'static locks::RwLock<extern "C" fn(&mut T) -> L2CValue>,
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
-        unsafe {
-            smashline_install_status_script(
-                agent,
-                status,
-                line,
-                std::mem::transmute(function),
-                std::mem::transmute(original),
-            );
-        }
-    }
-
-    pub fn install_one_arg_status_script<T>(
-        agent: Option<Hash40>,
-        status: LuaConst,
-        line: StatusLine,
-        function: unsafe extern "C" fn(&mut T, L2CValue) -> L2CValue,
-        original: &'static locks::RwLock<extern "C" fn(&mut T, L2CValue) -> L2CValue>,
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
-        unsafe {
-            smashline_install_status_script(
-                agent,
-                status,
-                line,
-                std::mem::transmute(function),
-                std::mem::transmute(original),
-            );
-        }
-    }
-
-    pub fn install_two_arg_status_script<T>(
-        agent: Option<Hash40>,
-        status: LuaConst,
-        line: StatusLine,
-        function: unsafe extern "C" fn(&mut T, L2CValue, L2CValue) -> L2CValue,
-        original: &'static locks::RwLock<extern "C" fn(&mut T, L2CValue, L2CValue) -> L2CValue>,
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
-        unsafe {
-            smashline_install_status_script(
-                agent,
-                status,
-                line,
-                std::mem::transmute(function),
-                std::mem::transmute(original),
-            );
-        }
-    }
-
-    pub fn install_basic_line_callback<T>(
-        agent: Option<Hash40>,
-        line: i32,
-        function: unsafe extern "C" fn(&mut T),
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        smashline_install_line_callback(
-            agent.and_then(|x| NonZeroU64::new(extract_hash(x))),
-            line,
-            function as *const (),
-        );
-    }
-
-    pub fn install_one_arg_line_callback<T>(
-        agent: Option<Hash40>,
-        line: i32,
-        function: unsafe extern "C" fn(&mut T, &mut LocalL2CValue),
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        smashline_install_line_callback(
-            agent.and_then(|x| NonZeroU64::new(extract_hash(x))),
-            line,
-            function as *const (),
-        );
-    }
-
-    pub fn install_two_arg_line_callback<T>(
-        agent: Option<Hash40>,
-        line: i32,
-        function: unsafe extern "C" fn(&mut T, &mut LocalL2CValue, &mut LocalL2CValue),
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
-        smashline_install_line_callback(
-            agent.and_then(|x| NonZeroU64::new(extract_hash(x))),
-            line,
-            function as *const (),
-        );
     }
 
     pub fn get_target_function(module_name: impl Into<String>, offset: usize) -> Option<usize> {
@@ -530,32 +418,11 @@ pub mod api {
         }
     }
 
-    pub fn install_state_callback<T>(
-        agent: Option<Hash40>,
-        event: ObjectEvent,
-        function: unsafe extern "C" fn(&mut T),
-    ) where
-        T: DerefMut<Target = L2CFighterBase>,
-    {
+    pub fn install_state_callback(agent: Option<Hash40>, event: ObjectEvent, function: *const ()) {
         smashline_install_state_callback(
             agent.and_then(|x| NonZeroU64::new(extract_hash(x))),
             event,
-            unsafe { std::mem::transmute(function) },
+            function,
         );
-    }
-
-    #[doc(hidden)]
-    pub extern "C" fn __basic_status_stub<T>(_: &mut T) -> L2CValue {
-        panic!("basic status stub called")
-    }
-
-    #[doc(hidden)]
-    pub extern "C" fn __one_arg_status_stub<T>(_: &mut T, _: L2CValue) -> L2CValue {
-        panic!("one arg stub called")
-    }
-
-    #[doc(hidden)]
-    pub extern "C" fn __two_arg_status_stub<T>(_: &mut T, _: L2CValue, _: L2CValue) -> L2CValue {
-        panic!("two arg stub called")
     }
 }

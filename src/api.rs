@@ -1,22 +1,16 @@
 use std::num::NonZeroU64;
 
-use rtld::Section;
-use smashline::{
-    Acmd, Hash40, L2CAgentBase, LuaConst, ObjectEvent, Priority, StatusLine, StringFFI, Variadic,
-};
+use acmd_engine::action::ActionRegistry;
+use smashline::{Acmd, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI};
 
 use crate::{
     callbacks::{StatusCallback, StatusCallbackFunction},
-    cloning::{
-        fighters::NewFighter,
-        weapons::{NewAgent, NewArticle},
-    },
+    cloning::weapons::{NewAgent, NewArticle},
     create_agent::{
-        AcmdScript, StatusScript, StatusScriptFunction, StatusScriptId, LOWERCASE_FIGHTER_NAMES,
+        AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
         LOWERCASE_WEAPON_NAMES,
     },
     state_callback::{StateCallback, StateCallbackFunction},
-    unwind::{MemoryRegionSearchKey, MEMORY_REGIONS},
 };
 
 #[no_mangle]
@@ -25,49 +19,21 @@ pub extern "C" fn smashline_install_acmd_script(
     script: Hash40,
     category: Acmd,
     priority: Priority,
-    function: extern "C" fn(&mut L2CAgentBase, &mut Variadic),
+    function: unsafe extern "C" fn(&mut L2CAgentBase),
 ) {
     crate::create_agent::ACMD_SCRIPTS
         .write()
         .entry(agent)
         .or_default()
         .set_script(script, category, AcmdScript { function, priority });
-
-    let Some(module) = rtld::find_module_for_address(function as u64, Section::Text) else {
-        panic!();
-    };
-
-    let Some(region) = module.get_symbol_range_for_address(function as u64) else {
-        panic!();
-    };
-
-    let mut current = region.start;
-    let mut landing_pad = None;
-    while current <= region.end {
-        unsafe {
-            let inst = *(current as *const u32);
-            if inst == 0xB000B1E5 {
-                landing_pad = Some(current);
-                break;
-            }
-        }
-
-        current += 4;
-    }
-
-    let landing_pad = landing_pad.unwrap();
-
-    let mut memory = MEMORY_REGIONS.write();
-    memory.insert(MemoryRegionSearchKey::Region(region), landing_pad);
 }
 
 #[no_mangle]
 pub extern "C" fn smashline_install_status_script(
     agent: Option<NonZeroU64>,
-    status: LuaConst,
+    status: i32,
     line: StatusLine,
     function: *const (),
-    original: &'static locks::RwLock<*const ()>,
 ) {
     let agent = agent
         .map(|x| Hash40(x.get()))
@@ -78,27 +44,7 @@ pub extern "C" fn smashline_install_status_script(
         .entry(agent)
         .or_default()
         .push(StatusScript {
-            id: StatusScriptId::Replace {
-                id: status,
-                original,
-            },
-            function: StatusScriptFunction::from_line(line, function),
-        });
-}
-
-#[no_mangle]
-pub extern "C" fn smashline_install_new_status_script(
-    agent: Hash40,
-    id: i32,
-    line: StatusLine,
-    function: *const (),
-) {
-    crate::create_agent::STATUS_SCRIPTS
-        .write()
-        .entry(agent)
-        .or_default()
-        .push(StatusScript {
-            id: StatusScriptId::New(id),
+            id: status,
             function: StatusScriptFunction::from_line(line, function),
         });
 }
@@ -133,24 +79,39 @@ pub extern "C" fn smashline_install_state_callback(
 }
 
 #[no_mangle]
-pub extern "C" fn smashline_clone_fighter(original_fighter: StringFFI, new_fighter: StringFFI) {
-    let original = original_fighter.as_str().unwrap();
-    let new = new_fighter.as_str().unwrap();
-
-    let base_id = LOWERCASE_FIGHTER_NAMES
+pub extern "C" fn smashline_add_param_object(fighter: StringFFI, name: StringFFI) {
+    let fighter = fighter.as_str().unwrap();
+    let fighter_id = LOWERCASE_FIGHTER_NAMES
         .iter()
-        .position(|name| name == original)
+        .position(|name| name == fighter)
         .unwrap();
 
-    crate::cloning::fighters::NEW_FIGHTERS
+    crate::params::WHITELISTED_PARAMS
         .write()
-        .push(NewFighter {
-            base_id: base_id as i32,
-            fighter_kind_hash: Hash40::new(&format!("fighter_kind_{new}")),
-            name: new.to_string(),
-            name_ffi: format!("{new}\0"),
-            hash: Hash40::new(new),
-        });
+        .entry(fighter_id as i32)
+        .or_default()
+        .push(Hash40::new(name.as_str().unwrap()));
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_get_action_registry() -> &'static ActionRegistry {
+    &crate::interpreter::ACTION_REGISTRY
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_reload_script(
+    fighter: StringFFI,
+    weapon: StringFFI,
+    file_name: StringFFI,
+) {
+    let fighter = fighter.as_str().unwrap();
+    let weapon = weapon.as_str().unwrap();
+    let file_name = file_name.as_str().unwrap();
+    crate::interpreter::load_single_script(
+        fighter,
+        (!weapon.is_empty()).then_some(weapon),
+        file_name,
+    );
 }
 
 #[no_mangle]

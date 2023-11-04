@@ -1,12 +1,14 @@
-use std::{ops::Range, cmp::Ordering, collections::BTreeMap};
+use std::{cmp::Ordering, collections::BTreeMap, ops::Range};
 
 use locks::RwLock;
 use once_cell::sync::Lazy;
-use rtld::{Section, ModuleObject};
+use rtld::{ModuleObject, Section};
 use skyline::hooks::InlineCtx;
 
-pub static MEMORY_REGIONS: RwLock<BTreeMap<MemoryRegionSearchKey, u64>> = RwLock::new(BTreeMap::new());
+pub static MEMORY_REGIONS: RwLock<BTreeMap<MemoryRegionSearchKey, u64>> =
+    RwLock::new(BTreeMap::new());
 
+#[allow(unused)]
 pub enum MemoryRegionSearchKey {
     Region(Range<u64>),
     Key(u64),
@@ -69,14 +71,20 @@ extern "C" {
 }
 
 static NNSDK_MODULE: Lazy<&'static mut ModuleObject> = Lazy::new(|| {
-    let Some(nnsdk) = rtld::find_module_for_address(get_ip as *const () as u64, Section::Text) else {
+    let Some(nnsdk) = rtld::find_module_for_address(get_ip as *const () as u64, Section::Text)
+    else {
         panic!("Failed to find ModuleObject for nnSdk");
     };
 
     nnsdk
 });
 
-pub fn step_with_dwarf(address_space: *mut u64, ip: u64, unwind_info: *mut u64, registers: *mut u64) -> u64 {
+pub fn step_with_dwarf(
+    address_space: *mut u64,
+    ip: u64,
+    unwind_info: *mut u64,
+    registers: *mut u64,
+) -> u64 {
     let ptr: extern "C" fn(*mut u64, u64, *mut u64, *mut u64) -> u64 = unsafe {
         std::mem::transmute(NNSDK_MODULE.get_address_range(Section::Text).start + 0x51ef30)
     };
@@ -100,10 +108,7 @@ pub fn install_unwind_patches() {
         BAD_INFO_CHECK = NNSDK_MODULE.get_address_range(Section::Text).start + 0x51e5dc;
     }
 
-    skyline::install_hooks!(
-        prevent_bad_info_check,
-        step_replace
-    );
+    skyline::install_hooks!(prevent_bad_info_check, step_replace);
 }
 
 static mut BAD_INFO_CHECK: u64 = 0;
@@ -112,11 +117,12 @@ static mut BAD_INFO_CHECK: u64 = 0;
 pub fn prevent_bad_info_check(ctx: &mut InlineCtx) {
     extern "C" fn stub() {}
 
-    let ip = unsafe {
-        get_ip(*ctx.registers[0].x.as_ref() as *const u64)
-    };
+    let ip = unsafe { get_ip(*ctx.registers[0].x.as_ref() as *const u64) };
 
-    if MEMORY_REGIONS.read().contains_key(&MemoryRegionSearchKey::Key(ip)) {
+    if MEMORY_REGIONS
+        .read()
+        .contains_key(&MemoryRegionSearchKey::Key(ip))
+    {
         unsafe {
             *ctx.registers[8].x.as_mut() = stub as *const () as u64;
         }
@@ -146,9 +152,14 @@ unsafe fn step_replace(this: *mut u64) -> u64 {
     }
 
     let ip = get_ip(this);
-    
-    let landing_pad = MEMORY_REGIONS.read().get(&MemoryRegionSearchKey::Key(ip)).copied();
-    
+
+    let landing_pad = crate::interpreter::try_get_interpreter_landing_pad().or_else(|| {
+        MEMORY_REGIONS
+            .read()
+            .get(&MemoryRegionSearchKey::Key(ip))
+            .copied()
+    });
+
     if let Some(landing_pad) = landing_pad {
         let unwind_info_ptr = this.add(0x44);
         *unwind_info_ptr.add(0) = ip as u64;
@@ -165,7 +176,13 @@ unsafe fn step_replace(this: *mut u64) -> u64 {
     }
 }
 
-unsafe extern "C" fn custom_eh_personality(version: i32, actions: u64, _: u64, _: *mut u64, context: *mut u64) -> u64 {
+unsafe extern "C" fn custom_eh_personality(
+    version: i32,
+    actions: u64,
+    _: u64,
+    _: *mut u64,
+    context: *mut u64,
+) -> u64 {
     const _UA_SEARCH_PHASE: u64 = 1;
     const _URC_HANDLER_FOUND: u64 = 6;
     const _URC_INSTALL_CONTEXT: u64 = 7;

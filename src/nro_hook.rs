@@ -54,12 +54,17 @@ unsafe fn nro_hook(
     }
 
     for hook in NORMAL_HOOKS.read().iter() {
-        A64HookFunction((hook.offset as u64 + (*module.ModuleObject).module_base) as _, hook.function as _, (hook.original as *const *const ()).cast_mut().cast());
+        A64HookFunction(
+            (hook.offset as u64 + (*module.ModuleObject).module_base) as _,
+            hook.function as _,
+            (hook.original as *const *const ()).cast_mut().cast(),
+        );
     }
 
-    for hook in HOOKS.read().iter() {
-        let base = unsafe { (*module.ModuleObject).module_base };
+    let base = unsafe { (*module.ModuleObject).module_base };
+    crate::interpreter::nro_hook(base);
 
+    for hook in HOOKS.read().iter() {
         // Fill extra instructions with nop so inline hooker doesn't try to do anything fancy
         for x in 1..6 {
             unsafe {
@@ -145,15 +150,10 @@ pub fn add_hook(
     });
 }
 
-pub fn add_normal_hook(
-    offset: usize,
-    original: &'static mut *const (),
-    function: *const (),
-) {
+pub fn add_normal_hook(offset: usize, original: &'static mut *const (), function: *const ()) {
     NORMAL_HOOKS.write().push(Hook {
-        offset, 
+        offset,
         original,
-        function
+        function,
     });
 }
-

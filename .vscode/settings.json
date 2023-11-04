@@ -1,0 +1,23 @@
+{
+    "rust-analyzer.check.overrideCommand": [
+        "cargo",
+        "skyline",
+        "check",
+        "--json"
+    ],
+    "rust-analyzer.cargo.buildScripts.overrideCommand": [
+        "cargo",
+        "skyline",
+        "check",
+        "--json"
+    ],
+    "rust-analyzer.cargo.extraEnv": {
+        "RUSTFLAGS": "--cfg skyline_std_v3",
+        "SKYLINE_ADD_NRO_HEADER": 1
+    },
+    "workbench.colorCustomizations": {
+        "activityBar.background": "#273108",
+        "titleBar.activeBackground": "#37450B",
+        "titleBar.activeForeground": "#F8FCED"
+    }
+}

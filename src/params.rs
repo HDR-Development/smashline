@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, BTreeMap},
+    collections::{BTreeMap, HashMap},
     sync::{
         atomic::{AtomicI32, Ordering},
         Arc,
@@ -14,7 +14,7 @@ use vtables::{vtable, VirtualClass};
 
 use std::ops::{Deref, DerefMut};
 
-use crate::cloning::weapons::{NEW_AGENTS, NEW_ARTICLES, try_get_new_agent};
+use crate::cloning::weapons::{try_get_new_agent, NEW_AGENTS, NEW_ARTICLES};
 
 pub static WHITELISTED_PARAMS: RwLock<BTreeMap<i32, Vec<Hash40>>> = RwLock::new(BTreeMap::new());
 
@@ -123,7 +123,7 @@ impl SmashlineParamDataAdapter {
         use ParamKind::*;
 
         let Some(data) = self.data.as_ref() else {
-            return 0
+            return 0;
         };
 
         match data {
@@ -263,7 +263,7 @@ static ADAPTER_VTABLE: &'static ParamDataAdapterVTable = &ParamDataAdapterVTable
 };
 
 extern "C" fn get_param_reimpl(object: &FighterParamHolder, key: u64) -> SmashlineParamDataAdapter {
-    let data = vtables::vtable_custom_data::<_, FighterParamHolder>(object.vtable.0);
+    let data = vtables::vtable_custom_data::<_, FighterParamHolder>(object.vtable.0).unwrap();
 
     let key = data.map_keys.get(&key).copied().unwrap_or(key);
 
@@ -278,7 +278,7 @@ extern "C" fn get_param_reimpl(object: &FighterParamHolder, key: u64) -> Smashli
 }
 
 extern "C" fn clone_reimpl(object: &FighterParamHolder) -> *mut FighterParamHolder {
-    let data = vtables::vtable_custom_data::<_, FighterParamHolder>(object.vtable.0);
+    let data = vtables::vtable_custom_data::<_, FighterParamHolder>(object.vtable.0).unwrap();
 
     let original_clone = data.original_clone.unwrap();
 
@@ -361,7 +361,7 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
                     Hash40::new(&format!("param_{}", agent.new_name)).0,
                 );
             }
-        }       
+        }
     }
 
     if let Some(whitelist) = WHITELISTED_PARAMS.read().get(&fighter_id) {

@@ -1,11 +1,10 @@
 use std::{
     collections::BTreeMap,
-    sync::atomic::{AtomicI32, Ordering, AtomicBool},
+    sync::atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
-use smash::app::BattleObject;
 use smashline::{skyline_smash::app::BattleObjectModuleAccessor, Hash40};
 
 pub struct NewAgent {
@@ -133,8 +132,6 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
         original_data
     }
 }
-
-
 
 fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
     if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
