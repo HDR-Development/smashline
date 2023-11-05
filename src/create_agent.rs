@@ -20,8 +20,8 @@ use smash::{
     lua_State,
 };
 use smashline::{
-    locks::RwLock, Acmd, AsHash40, BattleObjectCategory, Hash40, L2CAgentBase, L2CFighterBase,
-    L2CValue, Priority, StatusLine, Variadic,
+    locks::RwLock, Acmd, AcmdFunction, AsHash40, BattleObjectCategory, Hash40, L2CAgentBase,
+    L2CFighterBase, L2CValue, Priority, StatusLine, Variadic,
 };
 use vtables::{CustomDataAccessError, VirtualClass};
 
@@ -285,6 +285,7 @@ pub enum UserScript {
 struct L2CAnimcmdWrapperData {
     original_deleter: Option<extern "C" fn(&mut L2CAnimcmdWrapper)>,
     additional_module: Option<i32>,
+    original_scripts: HashMap<Hash40, AcmdFunction>,
     user_scripts: HashMap<Hash40, UserScript>,
     loaded_script_arc: Option<Arc<Vec<LoadedScript>>>,
 }
@@ -406,6 +407,12 @@ fn create_agent_hook(
                 }
             };
 
+            let original_scripts: HashMap<Hash40, AcmdFunction> = agent
+                .function_map
+                .iter()
+                .map(|(name, function)| (*name, unsafe { std::mem::transmute(*function) }))
+                .collect();
+
             let hash = Hash40::new(name);
 
             let mut user_scripts = HashMap::new();
@@ -415,6 +422,10 @@ fn create_agent_hook(
                 .iter()
                 .filter(|script| acmd == script.script.read().category)
             {
+                agent.sv_set_function_hash(
+                    unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
+                    script.script.read().replace.as_hash40(),
+                );
                 user_scripts.insert(
                     script.script.read().replace.as_hash40(),
                     UserScript::Script(script.script.clone()),
@@ -445,6 +456,7 @@ fn create_agent_hook(
                 data.original_deleter = Some(deleter);
                 data.user_scripts = user_scripts;
                 data.loaded_script_arc = Some(smashline_scripts);
+                data.original_scripts = original_scripts;
                 std::mem::transmute(wrapper)
             };
 
@@ -498,11 +510,21 @@ fn create_agent_hook(
 
             let mut user_scripts = HashMap::new();
 
+            let original_scripts: HashMap<Hash40, AcmdFunction> = agent
+                .function_map
+                .iter()
+                .map(|(name, function)| (*name, unsafe { std::mem::transmute(*function) }))
+                .collect();
+
             let smashline_scripts = crate::interpreter::get_or_load_scripts(&owner, Some(&name));
             for script in smashline_scripts
                 .iter()
                 .filter(|script| acmd == script.script.read().category)
             {
+                agent.sv_set_function_hash(
+                    unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
+                    script.script.read().replace.as_hash40(),
+                );
                 user_scripts.insert(
                     script.script.read().replace.as_hash40(),
                     UserScript::Script(script.script.clone()),
@@ -533,6 +555,7 @@ fn create_agent_hook(
                 data.original_deleter = Some(deleter);
                 data.user_scripts = user_scripts;
                 data.loaded_script_arc = Some(smashline_scripts);
+                data.original_scripts = original_scripts;
                 std::mem::transmute(wrapper)
             };
 
@@ -695,6 +718,48 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
             .unwrap_or_default() as i32
     };
 
+    let mut original_statuses = HashMap::new();
+
+    for id in 0..old_total {
+        macro_rules! get {
+            ($($i:ident),*) => {
+                $(
+                    {
+                        let lua_id = smash::lib::L2CValue::new(id);
+                        let condition = smash::lib::L2CValue::new(StatusLine::$i as i32);
+                        let function = agent.0.sv_get_status_func(&lua_id, &condition);
+                        if let Some(ptr) = function.try_pointer() {
+                            original_statuses.insert((StatusLine::$i, id), ptr.cast::<()>() as _);
+                        }
+                    }
+                )*
+            }
+        }
+
+        get! {
+            Pre,
+            Main,
+            End,
+            Init,
+            Exec,
+            ExecStop,
+            Post,
+            Exit,
+            MapCorrection,
+            FixCamera,
+            FixPosSlow,
+            CheckDamage,
+            CheckAttack,
+            OnChangeLr,
+            LeaveStop,
+            NotifyEventGimmick,
+            CalcParam
+        }
+    }
+
+    let data = vtables::vtable_custom_data_mut::<_, L2CFighterWrapper>(agent.deref_mut());
+    data.original_statuses = original_statuses;
+
     let mut new_total = old_total;
 
     if let Some(common) = statuses.get(&Hash40::new("common")) {
@@ -751,6 +816,7 @@ struct L2CFighterWrapperData {
     hash: Hash40,
     is_weapon: bool,
     additional_fighter_module: Option<i32>,
+    original_statuses: HashMap<(StatusLine, i32), *const ()>,
     original_deleter: Option<extern "C" fn(&mut L2CFighterWrapper)>,
     original_set_status_scripts: Option<extern "C" fn(&mut L2CFighterWrapper)>,
 }
@@ -917,12 +983,34 @@ fn create_agent_status_weapon(
     Some(unsafe { std::mem::transmute(wrapper) })
 }
 
+pub(crate) fn original_scripts<'a>(
+    agent: &'a L2CAgentBase,
+) -> Option<&HashMap<Hash40, AcmdFunction>> {
+    let wrapper: &'static L2CAnimcmdWrapper = unsafe { std::mem::transmute(agent) };
+    match vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(wrapper.deref()) {
+        Ok(data) => Some(&data.original_scripts),
+        Err(CustomDataAccessError::NotRelocated) => None,
+        Err(e) => panic!("failed to get original scripts: {e}"),
+    }
+}
+
 pub(crate) fn user_scripts<'a>(agent: &'a L2CAgentBase) -> Option<&HashMap<Hash40, UserScript>> {
     let wrapper: &'static L2CAnimcmdWrapper = unsafe { std::mem::transmute(agent) };
     match vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(wrapper.deref()) {
         Ok(data) => Some(&data.user_scripts),
         Err(CustomDataAccessError::NotRelocated) => None,
-        Err(e) => panic!("failed to get data scripts: {e}"),
+        Err(e) => panic!("failed to get user scripts: {e}"),
+    }
+}
+
+pub(crate) fn original_status<'a>(
+    fighter: &'a L2CFighterBase,
+) -> Option<&HashMap<(StatusLine, i32), *const ()>> {
+    let wrapper: &'static L2CFighterWrapper = unsafe { std::mem::transmute(fighter) };
+    match vtables::vtable_custom_data::<_, L2CFighterWrapper>(wrapper.deref()) {
+        Ok(data) => Some(&data.original_statuses),
+        Err(CustomDataAccessError::NotRelocated) => None,
+        Err(e) => panic!("failed to get status scripts: {e}"),
     }
 }
 

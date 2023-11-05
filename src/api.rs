@@ -1,7 +1,13 @@
-use std::num::NonZeroU64;
+use std::{
+    num::{NonZeroU64, NonZeroUsize},
+    ptr::NonNull,
+};
 
 use acmd_engine::action::ActionRegistry;
-use smashline::{Acmd, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI};
+use rtld::Section;
+use smashline::{
+    Acmd, AcmdFunction, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
+};
 
 use crate::{
     callbacks::{StatusCallback, StatusCallbackFunction},
@@ -61,6 +67,42 @@ pub extern "C" fn smashline_install_line_callback(
         hash: agent,
         function: StatusCallbackFunction::new(line, function),
     });
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_get_target_function(
+    target: StringFFI,
+    offset: u64,
+) -> Option<NonZeroUsize> {
+    NonZeroUsize::new(
+        (rtld::find_module_by_name(target.as_str().unwrap())
+            .unwrap()
+            .get_address_range(Section::Text)
+            .start
+            + offset) as usize,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_get_original_acmd(
+    fighter: &mut L2CAgentBase,
+    name: Hash40,
+) -> Option<AcmdFunction> {
+    let scripts = crate::create_agent::original_scripts(fighter)?;
+    scripts.get(&name).copied()
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_get_original_status(
+    fighter: &mut smashline::L2CFighterBase,
+    line: StatusLine,
+    kind: i32,
+) -> Option<NonNull<()>> {
+    let scripts = crate::create_agent::original_status(fighter)?;
+    scripts
+        .get(&(line, kind))
+        .copied()
+        .and_then(|ptr| NonNull::new(ptr.cast_mut()))
 }
 
 #[no_mangle]

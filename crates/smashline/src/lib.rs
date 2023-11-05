@@ -1,4 +1,5 @@
 use std::num::{NonZeroU64, NonZeroUsize};
+use std::ptr::NonNull;
 use std::str::Utf8Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -58,7 +59,7 @@ impl PartialEq<acmd_engine::asset::Category> for Acmd {
 }
 
 #[repr(i32)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum StatusLine {
     Pre,
     Main,
@@ -270,6 +271,9 @@ macro_rules! decl_imports {
 }
 
 decl_imports! {
+    fn smashline_get_original_acmd(fighter: &mut L2CAgentBase, name: Hash40) -> Option<AcmdFunction>;
+    fn smashline_get_original_status(fighter: &mut L2CFighterBase, line: StatusLine, status: i32) -> Option<NonNull<()>>;
+
     fn smashline_reload_script(fighter: StringFFI, weapon: StringFFI, file_name: StringFFI);
 
     fn smashline_get_action_registry() -> &'static acmd_engine::action::ActionRegistry;
@@ -324,6 +328,25 @@ decl_imports! {
         fighter_name: StringFFI,
         object: StringFFI
     );
+}
+
+pub fn original_acmd(agent: &mut L2CAgentBase, name: Hash40) -> AcmdFunction {
+    smashline_get_original_acmd(agent, name)
+        .unwrap_or_else(|| panic!("Failed to get original ACMD for {name:#?}"))
+}
+
+pub fn original_status<L: StatusLineMarker, T>(
+    _line: L,
+    fighter: &mut T,
+    kind: i32,
+) -> L::Function<T> {
+    unsafe {
+        L::cast_ptr(
+            smashline_get_original_status(std::mem::transmute(fighter), L::LINE, kind)
+                .unwrap_or_else(|| panic!("Failed to get original status for {kind}"))
+                .as_ptr(),
+        )
+    }
 }
 
 pub fn clone_weapon(

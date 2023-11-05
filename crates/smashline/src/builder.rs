@@ -14,6 +14,8 @@ pub trait StatusLineMarker: __sealed::Sealed {
 
     unsafe fn cast_function<T>(func: Self::Function<T>) -> *const ();
     unsafe fn cast_line_function<T>(func: Self::LineFunction<T>) -> *const ();
+
+    unsafe fn cast_ptr<T>(ptr: *const ()) -> Self::Function<T>;
 }
 
 macro_rules! markers {
@@ -32,6 +34,10 @@ macro_rules! markers {
 
                 unsafe fn cast_line_function<T>(func: Self::LineFunction<T>) -> *const () {
                     func as *const ()
+                }
+
+                unsafe fn cast_ptr<T>(ptr: *const ()) -> Self::Function<T> {
+                    std::mem::transmute(ptr)
                 }
             }
         )*
