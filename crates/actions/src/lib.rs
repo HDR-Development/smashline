@@ -120,7 +120,7 @@ pub fn register_defaults() {
 }
 
 #[cfg(not(feature = "bevy_reflect"))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct SerdeHash40(pub hash40::Hash40);
 
 #[cfg(feature = "bevy_reflect")]

@@ -581,7 +581,7 @@ impl Action for Attack {
             context,
             self.id,
             self.part,
-            GameHash40::new_raw(self.bone.0),
+            GameHash40::new_raw(self.bone.0 .0),
             self.damage,
             self.angle.as_angle() as u64,
             kbg,
@@ -614,7 +614,7 @@ impl Action for Attack {
             self.target_categories.bits() as i32,
             self.target_parts.bits() as i32,
             self.friendly_fire,
-            GameHash40::new_raw(self.collision_effect.as_hash().0),
+            GameHash40::new_raw(self.collision_effect.as_hash().0 .0),
             self.sound_level as i32,
             self.sound as i32,
             self.region as i32,
@@ -638,7 +638,7 @@ impl Action for Attack {
             AttackModule::set_vec_target_pos(
                 context.module_accessor,
                 self.id as i32,
-                GameHash40::new_raw(relative_to.0),
+                GameHash40::new_raw(relative_to.0 .0),
                 &smash::phx::Vector2f {
                     x: offset.x,
                     y: offset.y,
