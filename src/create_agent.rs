@@ -649,7 +649,7 @@ fn install_status_scripts(
 ) -> i32 {
     let mut max_new = old_total;
     for status in list.iter() {
-        max_new = max_new.max(status.id);
+        max_new = max_new.max(status.id + 1);
     }
     for status in list.iter() {
         use StatusScriptFunction::*;
