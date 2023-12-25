@@ -105,6 +105,35 @@ impl Agent {
         }
     }
 
+    pub fn acmd(&mut self, name: &str, function: AcmdFunction) -> &mut Self {
+        let category = if name.starts_with("game") {
+            Some(crate::Acmd::Game)
+        }
+        else if name.starts_with("effect") {
+            Some(crate::Acmd::Effect)
+        }
+        else if name.starts_with("sound") {
+            Some(crate::Acmd::Sound)
+        }
+        else if name.starts_with("expression") {
+            Some(crate::Acmd::Expression)
+        }
+        else {
+            None
+        };
+        if category.is_some() {
+            self.acmd.push(AcmdScript {
+                category: category.unwrap(),
+                replaces: name.as_hash40(),
+                function,
+            });
+        }
+        else {
+            println!("ACMD Category for {} could not be found! Skipping...", name);
+        }
+        self
+    }
+
     pub fn game_acmd(&mut self, name: impl AsHash40, function: AcmdFunction) -> &mut Self {
         self.acmd.push(AcmdScript {
             category: crate::Acmd::Game,
