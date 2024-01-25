@@ -1,5 +1,6 @@
 #![feature(pointer_is_aligned)]
 #![feature(strict_provenance)]
+#![feature(exposed_provenance)]
 use std::{
     alloc::Layout,
     any::{Any, TypeId},
