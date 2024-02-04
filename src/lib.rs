@@ -106,6 +106,7 @@ mod effects;
 mod interpreter;
 mod nro_hook;
 mod params;
+mod runtime_reload;
 mod state_callback;
 mod static_accessor;
 mod unwind;
@@ -150,6 +151,8 @@ pub extern "C" fn main() {
     create_agent::install_create_agent_share_hooks();
     create_agent::install_status_create_agent_hooks();
     nro_hook::install();
+    interpreter::install();
+    runtime_reload::install();
     state_callback::install_state_callback_hooks();
     callbacks::install_callback_hooks();
     unwind::install_unwind_patches();

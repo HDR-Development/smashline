@@ -9,7 +9,7 @@ use locks::Mutex;
 use skyline::hooks::InlineCtx;
 use smashline::{Hash40, L2CAgentBase, Variadic};
 
-use crate::create_agent::UserScript;
+use crate::create_agent::{unreachable_smashline_script, UserScript};
 
 extern "C" {
     #[allow(unused)]
@@ -186,7 +186,14 @@ extern "C" fn smashline_interpreter(
             }
         }
     } else {
-        original(agent, &mut Variadic::new());
+        if original as *const () == unreachable_smashline_script as *const () {
+            println!(
+                "Unreachable smashline script encountered by {:p}",
+                agent as *mut L2CAgentBase as *mut ()
+            );
+        } else {
+            original(agent, &mut Variadic::new());
+        }
     }
 }
 
@@ -228,6 +235,32 @@ unsafe fn call_coroutine_hook(ctx: &mut InlineCtx) {
     *ctx.registers[2].x.as_mut() = *ctx.registers[8].x.as_ref();
     *ctx.registers[8].x.as_mut() = __smashline_interpreter as *const u64 as _;
     *ctx.registers[1].x.as_mut() = hash.0;
+}
+
+static mut CALLING: Option<Hash40> = None;
+#[skyline::hook(offset = 0x372cad0, inline)]
+unsafe fn call_function_by_hash(ctx: &InlineCtx) {
+    CALLING = Some(Hash40(*ctx.registers[1].x.as_ref()));
+}
+
+#[skyline::hook(offset = 0x372cc54, inline)]
+unsafe fn call_by_hash_hook(ctx: &mut InlineCtx) {
+    if let Some(calling) = CALLING.take() {
+        // NOTE: This logic is very fragile, but its the quickest work around I can come up
+        // with to prevent the unreachable script being called unintentionally
+
+        let original = *ctx.registers[8].x.as_ref();
+
+        if original as *const () == unreachable_smashline_script as *const () {
+            *ctx.registers[2].x.as_mut() = original;
+            *ctx.registers[8].x.as_mut() = __smashline_interpreter as *const u64 as _;
+            *ctx.registers[1].x.as_mut() = calling.0;
+        }
+    }
+}
+
+pub fn install() {
+    skyline::install_hooks!(call_by_hash_hook, call_function_by_hash);
 }
 
 pub fn nro_hook(module_base: u64) {

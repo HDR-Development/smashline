@@ -28,6 +28,28 @@ pub enum StatusCallbackFunction {
 }
 
 impl StatusCallbackFunction {
+    pub fn as_address(&self) -> usize {
+        match self {
+            Self::Pre(func) => *func as *const () as usize,
+            Self::Main(func) => *func as *const () as usize,
+            Self::End(func) => *func as *const () as usize,
+            Self::Init(func) => *func as *const () as usize,
+            Self::Exec(func) => *func as *const () as usize,
+            Self::ExecStop(func) => *func as *const () as usize,
+            Self::Post(func) => *func as *const () as usize,
+            Self::Exit(func) => *func as *const () as usize,
+            Self::MapCorrection(func) => *func as *const () as usize,
+            Self::FixCamera(func) => *func as *const () as usize,
+            Self::FixPosSlow(func) => *func as *const () as usize,
+            Self::CheckDamage(func) => *func as *const () as usize,
+            Self::CheckAttack(func) => *func as *const () as usize,
+            Self::OnChangeLr(func) => *func as *const () as usize,
+            Self::LeaveStop(func) => *func as *const () as usize,
+            Self::NotifyEventGimmick(func) => *func as *const () as usize,
+            Self::CalcParam(func) => *func as *const () as usize,
+        }
+    }
+
     pub fn new(line: StatusLine, function: *const ()) -> Self {
         use StatusLine::*;
         match line {
@@ -161,11 +183,17 @@ decl_functions! {
 // main is handled differently so that we can call it after
 static mut ORIGINAL: *const () = std::ptr::null();
 
-unsafe fn call_line_status_hook(fighter: &mut L2CFighterBase, variadic: &mut Variadic, string: *const u8, va_list: u32) {
-    let callable: extern "C" fn(&mut L2CFighterBase, &mut Variadic, *const u8, u32) = std::mem::transmute(ORIGINAL);
+unsafe fn call_line_status_hook(
+    fighter: &mut L2CFighterBase,
+    variadic: &mut Variadic,
+    string: *const u8,
+    va_list: u32,
+) {
+    let callable: extern "C" fn(&mut L2CFighterBase, &mut Variadic, *const u8, u32) =
+        std::mem::transmute(ORIGINAL);
     callable(fighter, variadic, string, va_list);
     let agent = crate::create_agent::agent_hash(fighter);
-    
+
     let callbacks = CALLBACKS.read();
     for callback in callbacks.iter() {
         if let StatusCallbackFunction::Main(callback_fn) = callback.function {

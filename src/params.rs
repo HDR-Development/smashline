@@ -1,3 +1,4 @@
+#![allow(invalid_reference_casting)]
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{

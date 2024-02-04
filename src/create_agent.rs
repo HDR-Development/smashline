@@ -115,6 +115,30 @@ pub enum StatusScriptFunction {
 }
 
 impl StatusScriptFunction {
+    pub fn as_address(&self) -> usize {
+        match self {
+            Self::Pre(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::Main(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::End(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::Init(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::Exec(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::ExecStop(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::Post(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::Exit(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::MapCorrection(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::FixCamera(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::FixPosSlow(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::CheckDamage(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::CheckAttack(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::OnChangeLr(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::LeaveStop(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+            Self::NotifyEventGimmick(func) => {
+                func.map(|f| f as *const () as usize).unwrap_or_default()
+            }
+            Self::CalcParam(func) => func.map(|f| f as *const () as usize).unwrap_or_default(),
+        }
+    }
+
     pub fn from_line(line: StatusLine, function: *const ()) -> Self {
         use StatusLine::*;
         match line {
@@ -164,6 +188,23 @@ pub struct AcmdScripts {
 }
 
 impl AcmdScripts {
+    pub fn remove_by_module_range(&mut self, start: usize, end: usize) {
+        for set in [
+            &mut self.game,
+            &mut self.effect,
+            &mut self.sound,
+            &mut self.expression,
+        ] {
+            let working = std::mem::take(set);
+            *set = working
+                .into_iter()
+                .filter(|(_, script)| {
+                    !(start..end).contains(&(script.function as *const () as usize))
+                })
+                .collect();
+        }
+    }
+
     pub fn set_script(&mut self, name: Hash40, category: Acmd, script: AcmdScript) {
         let _ = match category {
             Acmd::Game => self.game.insert(name, script),
@@ -272,7 +313,11 @@ impl DerefMut for L2CAnimcmdWrapper {
 #[repr(transparent)]
 struct L2CAnimcmdWrapper(L2CAgentBase);
 
-extern "C" fn unreachable_smashline_script(_fighter: &mut L2CAgentBase, _variadic: &mut Variadic) {
+#[no_mangle]
+pub(crate) extern "C" fn unreachable_smashline_script(
+    _fighter: &mut L2CAgentBase,
+    _variadic: &mut Variadic,
+) {
     panic!("unreachable smashline script called, this is an implementation error");
 }
 
@@ -367,7 +412,12 @@ fn create_agent_hook(
 
     match category {
         BattleObjectCategory::Fighter => {
-            let Some(name) = LOWERCASE_FIGHTER_NAMES.get(object.kind as usize) else {
+            let kind = match &original {
+                OriginalFunc::CreateAgentShare { agent, .. } => *agent,
+                _ => object.kind,
+            };
+
+            let Some(name) = LOWERCASE_FIGHTER_NAMES.get(kind as usize) else {
                 // TODO: Warn
                 return original.call(object, boma, lua_state);
             };
@@ -999,7 +1049,9 @@ pub(crate) fn user_scripts<'a>(agent: &'a L2CAgentBase) -> Option<&HashMap<Hash4
     match vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(wrapper.deref()) {
         Ok(data) => Some(&data.user_scripts),
         Err(CustomDataAccessError::NotRelocated) => None,
-        Err(e) => panic!("failed to get user scripts: {e}"),
+        Err(e) => {
+            panic!("failed to get user scripts: {e}");
+        }
     }
 }
 
