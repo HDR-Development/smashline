@@ -20,6 +20,44 @@ use crate::{
 };
 
 #[no_mangle]
+pub extern "C" fn smashline_remove_by_plugin_range(start: usize, end: usize) {
+    crate::create_agent::ACMD_SCRIPTS
+        .write()
+        .values_mut()
+        .for_each(|scripts| scripts.remove_by_module_range(start, end));
+
+    crate::create_agent::STATUS_SCRIPTS
+        .write()
+        .values_mut()
+        .for_each(|functions| {
+            let working = std::mem::take(functions);
+            *functions = working
+                .into_iter()
+                .filter(|script| !(start..end).contains(&script.function.as_address()))
+                .collect();
+        });
+
+    {
+        let mut callbacks = crate::callbacks::CALLBACKS.write();
+
+        let working = std::mem::take(&mut *callbacks);
+        *callbacks = working
+            .into_iter()
+            .filter(|cb| !(start..end).contains(&cb.function.as_address()))
+            .collect();
+    }
+
+    {
+        let mut callbacks = crate::state_callback::STATE_CALLBACKS.write();
+        let working = std::mem::take(&mut *callbacks);
+        *callbacks = working
+            .into_iter()
+            .filter(|cb| !(start..end).contains(&(cb.function as *const () as usize)))
+            .collect();
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn smashline_install_acmd_script(
     agent: Hash40,
     script: Hash40,
