@@ -272,7 +272,11 @@ impl DerefMut for L2CAnimcmdWrapper {
 #[repr(transparent)]
 struct L2CAnimcmdWrapper(L2CAgentBase);
 
-extern "C" fn unreachable_smashline_script(_fighter: &mut L2CAgentBase, _variadic: &mut Variadic) {
+#[no_mangle]
+pub(crate) extern "C" fn unreachable_smashline_script(
+    _fighter: &mut L2CAgentBase,
+    _variadic: &mut Variadic,
+) {
     panic!("unreachable smashline script called, this is an implementation error");
 }
 
@@ -367,7 +371,12 @@ fn create_agent_hook(
 
     match category {
         BattleObjectCategory::Fighter => {
-            let Some(name) = LOWERCASE_FIGHTER_NAMES.get(object.kind as usize) else {
+            let kind = match &original {
+                OriginalFunc::CreateAgentShare { agent, .. } => *agent,
+                _ => object.kind,
+            };
+
+            let Some(name) = LOWERCASE_FIGHTER_NAMES.get(kind as usize) else {
                 // TODO: Warn
                 return original.call(object, boma, lua_state);
             };
@@ -999,7 +1008,9 @@ pub(crate) fn user_scripts<'a>(agent: &'a L2CAgentBase) -> Option<&HashMap<Hash4
     match vtables::vtable_custom_data::<_, L2CAnimcmdWrapper>(wrapper.deref()) {
         Ok(data) => Some(&data.user_scripts),
         Err(CustomDataAccessError::NotRelocated) => None,
-        Err(e) => panic!("failed to get user scripts: {e}"),
+        Err(e) => {
+            panic!("failed to get user scripts: {e}");
+        }
     }
 }
 

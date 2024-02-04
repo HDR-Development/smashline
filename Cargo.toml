@@ -2,7 +2,7 @@
 members = ["crates/*"]
 
 [workspace.package]
-version = "1.0.0"
+version = "1.1.2"
 authors = ["blujay <the.blu.dev@gmail.com>"]
 description = "An object script replacement engine for Super Smash Bros. Ultimate"
 edition = "2021"
@@ -48,8 +48,8 @@ smash_script = { git = "https://github.com/blu-dev/smash-script", branch = "deve
 [patch.'https://github.com/BenHall-7/hash40-rs']
 hash40 = { git = "https://github.com/blu-dev/hash40-rs", branch = "patch-1" }
 
-[patch.'https://github.com/blu-dev/smash-rs']
-smash-rs = { package = "smash", path = "../smash-rs" }
+# [patch.'https://github.com/blu-dev/smash-rs']
+# smash-rs = { package = "smash", path = "../smash-rs" }
 
 [profile.dev]
 panic = "abort"

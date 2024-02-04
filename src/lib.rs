@@ -150,6 +150,7 @@ pub extern "C" fn main() {
     create_agent::install_create_agent_share_hooks();
     create_agent::install_status_create_agent_hooks();
     nro_hook::install();
+    interpreter::install();
     state_callback::install_state_callback_hooks();
     callbacks::install_callback_hooks();
     unwind::install_unwind_patches();
