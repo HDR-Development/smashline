@@ -812,8 +812,14 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
 
     let mut new_total = old_total;
 
-    if let Some(common) = statuses.get(&Hash40::new("common")) {
-        new_total = new_total.max(install_status_scripts(old_total, common, agent));
+    if is_weapon {
+        if let Some(common) = statuses.get(&Hash40::new("weapon")) {
+            new_total = new_total.max(install_status_scripts(old_total, common, agent));
+        }
+    } else {
+        if let Some(common) = statuses.get(&Hash40::new("fighter")) {
+            new_total = new_total.max(install_status_scripts(old_total, common, agent));
+        }
     }
 
     if let Some(common) = statuses.get(&hash) {
