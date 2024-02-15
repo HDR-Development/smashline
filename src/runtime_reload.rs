@@ -217,7 +217,7 @@ unsafe fn get_game_state() -> *const u64 {
 
 static mut LAST_RUN_INSTANT: Option<Instant> = None;
 
-#[skyline::hook(offset = 0x3665e90, inline)]
+#[skyline::hook(offset = 0x3666b10, inline)]
 unsafe fn process_inputs_hook(ctx: &skyline::hooks::InlineCtx) {
     const INPUT: u32 = 0x20C0;
     if !get_game_state().is_null() {
