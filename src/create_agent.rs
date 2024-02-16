@@ -229,13 +229,13 @@ pub static STATUS_SCRIPTS: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =
     RwLock::new(BTreeMap::new());
 
 pub const LOWERCASE_FIGHTER_NAMES: StaticArrayAccessor<&'static str> =
-    StaticArrayAccessor::new(0x4f7fe20, 118);
+    StaticArrayAccessor::new(0x4f81e20, 118);
 
 pub const LOWERCASE_WEAPON_NAMES: StaticArrayAccessor<&'static str> =
-    StaticArrayAccessor::new(0x5184bd0, 0x267);
+    StaticArrayAccessor::new(0x5186bd0, 0x267);
 
 pub const LOWERCASE_WEAPON_OWNER_NAMES: StaticArrayAccessor<&'static str> =
-    StaticArrayAccessor::new(0x5187240, 0x267);
+    StaticArrayAccessor::new(0x5189240, 0x267);
 
 enum OriginalFunc {
     CreateAgentShare {
@@ -913,7 +913,7 @@ mod l2c_fighter_wrapper {
     fn RESET(&mut self);
 }
 
-#[skyline::hook(offset = 0x64bbb0)]
+#[skyline::hook(offset = 0x64bbd0)]
 fn create_agent_status_fighter(
     object: &mut BattleObject,
     boma: &mut BattleObjectModuleAccessor,
@@ -964,7 +964,7 @@ fn create_agent_status_fighter(
     Some(unsafe { std::mem::transmute(wrapper) })
 }
 
-#[skyline::hook(offset = 0x33ab4b0)]
+#[skyline::hook(offset = 0x33ac130)]
 fn create_agent_status_weapon(
     object: &mut BattleObject,
     boma: &mut BattleObjectModuleAccessor,
@@ -1079,10 +1079,10 @@ pub(crate) fn agent_hash(fighter: &L2CFighterBase) -> Hash40 {
         .hash
 }
 
-#[skyline::hook(offset = 0x33b5b80, inline)]
+#[skyline::hook(offset = 0x33b6800, inline)]
 unsafe fn enable_lua_module(ctx: &mut InlineCtx) {
     *ctx.registers[8].x.as_mut() =
-        skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + 0x33b8410;
+        skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + 0x33b9090;
 }
 
 pub fn install_status_create_agent_hooks() {
@@ -1094,19 +1094,19 @@ pub fn install_status_create_agent_hooks() {
 }
 
 create_agent_hook! {
-    0x64c2f0 => (Game, fighter);
-    0x64c910 => (Effect, fighter);
-    0x64cf30 => (Expression, fighter);
-    0x64d550 => (Sound, fighter);
-    0x33ac3b0 => (Game, weapon);
-    0x33ad310 => (Effect, weapon);
-    0x33ae270 => (Sound, weapon);
+    0x64c310 => (Game, fighter);
+    0x64c930 => (Effect, fighter);
+    0x64cf50 => (Expression, fighter);
+    0x64d570 => (Sound, fighter);
+    0x33ad030 => (Game, weapon);
+    0x33adf90 => (Effect, weapon);
+    0x33aeef0 => (Sound, weapon);
 }
 
 create_agent_hook! {
     share;
-    0x64db70 => (Game, share_fighter);
-    0x64e280 => (Effect, share_fighter);
+    0x64db90 => (Game, share_fighter);
+    0x64e2a0 => (Effect, share_fighter);
     0x64e8b0 => (Expression, share_fighter);
-    0x64eea0 => (Sound, share_fighter);
+    0x64eec0 => (Sound, share_fighter);
 }

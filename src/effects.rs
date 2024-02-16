@@ -5,16 +5,16 @@ use smashline::Hash40;
 #[allow(unused)]
 fn effect_manager() -> *mut u64 {
     let text = unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as *mut u8 };
-    unsafe { **(text.add(0x5332920).cast::<*mut *mut u64>()) }
+    unsafe { **(text.add(0x5334920).cast::<*mut *mut u64>()) }
 }
 
-#[skyline::from_offset(0x3562cf0)]
+#[skyline::from_offset(0x3563970)]
 fn unload_effects(manager: *mut u64, handle: u32);
 
-#[skyline::from_offset(0x355eec0)]
+#[skyline::from_offset(0x355fb40)]
 fn load_effects(manager: *mut u64, handle: u32, search_index: &u32) -> u32;
 
-#[skyline::hook(offset = 0x60bfb8, inline)]
+#[skyline::hook(offset = 0x60bfd8, inline)]
 unsafe fn load_fighter_effects(ctx: &InlineCtx) {
     let search_index_begin = &*(*ctx.registers[2].x.as_ref() as *const u32);
     let _result = load_effects(
@@ -62,6 +62,6 @@ unsafe fn load_fighter_effects(ctx: &InlineCtx) {
 }
 
 pub fn install_effect_transplant_hooks() {
-    skyline::patching::Patch::in_text(0x60bfb8).nop().unwrap();
+    skyline::patching::Patch::in_text(0x60bfd8).nop().unwrap();
     skyline::install_hook!(load_fighter_effects);
 }

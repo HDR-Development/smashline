@@ -29,26 +29,26 @@ fn call_state_callback(agent: &mut L2CFighterBase, event: ObjectEvent) {
     }
 }
 
-#[skyline::hook(offset = 0x48ace4, inline)]
+#[skyline::hook(offset = 0x48ad04, inline)]
 unsafe fn lua_module_start_lua2cpp(ctx: &InlineCtx) {
     let module = *ctx.registers[19].x.as_ref() as *const u64;
     let agent = std::mem::transmute(*module.add(0x1d8 / 8));
     call_state_callback(agent, ObjectEvent::Start);
 }
 
-#[skyline::hook(offset = 0x48ad80)]
+#[skyline::hook(offset = 0x48ada0)]
 unsafe fn lua_module_end(lua_module: *const u64) {
     let agent = std::mem::transmute(*lua_module.add(0x1d8 / 8));
     call_state_callback(agent, ObjectEvent::End);
 }
 
-#[skyline::hook(offset = 0x48ab8c, inline)]
+#[skyline::hook(offset = 0x48abac, inline)]
 unsafe fn lua_module_initialize_lua2cpp(ctx: &InlineCtx) {
     let agent = std::mem::transmute(*ctx.registers[0].x.as_ref());
     call_state_callback(agent, ObjectEvent::Initialize);
 }
 
-#[skyline::hook(offset = 0x48ac24, inline)]
+#[skyline::hook(offset = 0x48ac44, inline)]
 unsafe fn lua_module_finalize_lua2cpp(ctx: &InlineCtx) {
     let agent = std::mem::transmute(*ctx.registers[0].x.as_ref());
     call_state_callback(agent, ObjectEvent::Finalize);

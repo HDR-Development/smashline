@@ -118,7 +118,7 @@ impl FilesystemInfo {
         unsafe {
             let fs_info = *((skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
                 as *const u8)
-                .add(0x5330f20) as *mut *mut FilesystemInfo);
+                .add(0x5332f20) as *mut *mut FilesystemInfo);
             if !fs_info.is_null() {
                 Some(&mut *fs_info)
             } else {
@@ -249,7 +249,7 @@ impl ResServiceNX {
         unsafe {
             let res_service = *((skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
                 as *const u8)
-                .add(0x5330f28) as *mut *mut ResServiceNX);
+                .add(0x5332f28) as *mut *mut ResServiceNX);
             if !res_service.is_null() {
                 Some(&mut *res_service)
             } else {

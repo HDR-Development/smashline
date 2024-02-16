@@ -34,7 +34,7 @@ pub fn get_weapon_code_dependency(id: i32) -> Option<i32> {
 
 fn dynamic_module_manager() -> *mut u64 {
     let text = unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as *mut u8 };
-    unsafe { **text.add(0x5325cd0).cast::<*mut *mut u64>() }
+    unsafe { **text.add(0x5327cd0).cast::<*mut *mut u64>() }
 }
 
 #[repr(C)]
@@ -53,7 +53,7 @@ struct MyDeque {
     len: usize,
 }
 
-#[skyline::from_offset(0x22b4ec0)]
+#[skyline::from_offset(0x22b59a0)]
 fn extend_deque(deque: *mut MyDeque);
 
 extern "C" {
@@ -137,7 +137,7 @@ pub fn load_fighter_module(kind: i32) {
     }
 }
 
-#[skyline::from_offset(0x22b6460)]
+#[skyline::from_offset(0x22b6f40)]
 fn dynamic_module_manager_unload(manager: *mut u64, name: &Hash40);
 
 pub fn unload_fighter_module(id: i32) {
@@ -171,18 +171,18 @@ pub fn is_fighter_module_loaded(id: i32) -> bool {
     }
 }
 
-#[skyline::from_offset(0x353d900)]
+#[skyline::from_offset(0x353e580)]
 fn get_search_path_index(index: &mut u32, bytes: *const u8);
 
-#[skyline::from_offset(0x353dab0)]
+#[skyline::from_offset(0x353e730)]
 fn get_file_path_from_search_path(search_path: u32) -> u32;
 
-#[skyline::from_offset(0x353fa20)]
+#[skyline::from_offset(0x35406a0)]
 fn add_to_res_service(filesystem: *mut u64, file_path: u32);
 
 fn get_filesystem() -> *mut u64 {
     let text = unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as *mut u8 };
-    unsafe { *text.add(0x5330f20).cast::<*mut u64>() }
+    unsafe { *text.add(0x5332f20).cast::<*mut u64>() }
 }
 
 pub fn load_file(name: impl Into<String>) {
