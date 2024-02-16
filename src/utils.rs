@@ -137,7 +137,7 @@ pub fn load_fighter_module(kind: i32) {
     }
 }
 
-#[skyline::from_offset(0x22b6F40)]
+#[skyline::from_offset(0x22b6f40)]
 fn dynamic_module_manager_unload(manager: *mut u64, name: &Hash40);
 
 pub fn unload_fighter_module(id: i32) {
