@@ -1,6 +1,7 @@
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
-use smashline::{Hash40, L2CFighterBase, ObjectEvent};
+use smash::app::BattleObject;
+use smashline::{BattleObjectCategory, Hash40, L2CFighterBase, ObjectEvent};
 
 pub type StateCallbackFunction = unsafe extern "C" fn(&mut L2CFighterBase);
 
@@ -19,7 +20,18 @@ fn call_state_callback(agent: &mut L2CFighterBase, event: ObjectEvent) {
     for callback in callbacks.iter().filter(|cb| cb.event == event) {
         if let Some(required) = callback.agent {
             if hash != required {
-                continue;
+                let object: &mut BattleObject = unsafe {std::mem::transmute(agent.battle_object)};
+                if let Some(category) = BattleObjectCategory::from_battle_object_id(object.battle_object_id) {
+                    println!("category: {:#?}", category);
+                    match category {
+                        BattleObjectCategory::Fighter => if required != Hash40::new("fighter") { continue; },
+                        BattleObjectCategory::Weapon => if required != Hash40::new("weapon") { continue; },
+                        _ => { continue; }
+                    }
+                }
+                else {
+                    continue;
+                }
             }
         }
 
