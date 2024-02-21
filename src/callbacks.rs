@@ -1,7 +1,8 @@
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
 use smash::lib::L2CValue;
-use smashline::{Hash40, L2CFighterBase, StatusLine, Variadic};
+use smash::app::BattleObject;
+use smashline::{BattleObjectCategory, Hash40, L2CFighterBase, StatusLine, Variadic};
 
 pub type Callback = extern "C" fn(&mut L2CFighterBase);
 pub type Callback1 = extern "C" fn(&mut L2CFighterBase, &mut L2CValue);
@@ -199,7 +200,17 @@ unsafe fn call_line_status_hook(
         if let StatusCallbackFunction::Main(callback_fn) = callback.function {
             if let Some(hash) = callback.hash {
                 if agent != hash {
-                    continue;
+                    let object: &mut BattleObject = unsafe {std::mem::transmute(fighter.battle_object)};
+                    if let Some(category) = BattleObjectCategory::from_battle_object_id(object.battle_object_id) {
+                        match category {
+                            BattleObjectCategory::Fighter => if hash != Hash40::new("fighter") { continue; },
+                            BattleObjectCategory::Weapon => if hash != Hash40::new("weapon") { continue; },
+                            _ => { continue; }
+                        }
+                    }
+                    else {
+                        continue;
+                    }
                 }
             }
 
