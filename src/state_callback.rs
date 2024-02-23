@@ -22,7 +22,6 @@ fn call_state_callback(agent: &mut L2CFighterBase, event: ObjectEvent) {
             if hash != required {
                 let object: &mut BattleObject = unsafe {std::mem::transmute(agent.battle_object)};
                 if let Some(category) = BattleObjectCategory::from_battle_object_id(object.battle_object_id) {
-                    println!("category: {:#?}", category);
                     match category {
                         BattleObjectCategory::Fighter => if required != Hash40::new("fighter") { continue; },
                         BattleObjectCategory::Weapon => if required != Hash40::new("weapon") { continue; },
