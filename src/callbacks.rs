@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use locks::RwLock;
+use once_cell::sync::Lazy;
 use skyline::hooks::InlineCtx;
 use smash::lib::L2CValue;
 use smash::app::BattleObject;
@@ -78,12 +80,7 @@ impl StatusCallbackFunction {
     }
 }
 
-pub struct StatusCallback {
-    pub hash: Option<Hash40>,
-    pub function: StatusCallbackFunction,
-}
-
-pub static CALLBACKS: RwLock<Vec<StatusCallback>> = RwLock::new(Vec::new());
+pub static STATUS_CALLBACKS: RwLock<Lazy<HashMap<Option<Hash40>, Vec<StatusCallbackFunction>>>> = RwLock::new(Lazy::new(||HashMap::new()));
 
 #[inline(always)]
 fn call_callback(callback: Callback, agent: Option<Hash40>, ctx: &InlineCtx) {
@@ -134,10 +131,14 @@ macro_rules! decl_functions {
     ($($name:ident($line:ident, $offset:expr, $code_cave:expr) => $call_fn:ident);*) => {
         $(
             extern "C" fn $name(ctx: &InlineCtx) {
-                let callbacks = CALLBACKS.read();
-                for callback in callbacks.iter() {
-                    if let StatusCallbackFunction::$line(callback_fn) = callback.function {
-                        $call_fn(callback_fn, callback.hash, ctx);
+                let callbacks = STATUS_CALLBACKS.read();
+                for agent_callbacks in callbacks.iter() {
+                    let hash = agent_callbacks.0;
+                    let callback_vec = agent_callbacks.1;
+                    for function in callback_vec.iter() {
+                        if let StatusCallbackFunction::$line(callback_fn) = *function {
+                            $call_fn(callback_fn, *hash, ctx);
+                        }
                     }
                 }
             }
@@ -194,27 +195,32 @@ unsafe fn call_line_status_hook(
         std::mem::transmute(ORIGINAL);
     callable(fighter, variadic, string, va_list);
     let agent = crate::create_agent::agent_hash(fighter);
-
-    let callbacks = CALLBACKS.read();
-    for callback in callbacks.iter() {
-        if let StatusCallbackFunction::Main(callback_fn) = callback.function {
-            if let Some(hash) = callback.hash {
-                if agent != hash {
-                    let object: &mut BattleObject = unsafe {std::mem::transmute(fighter.battle_object)};
-                    if let Some(category) = BattleObjectCategory::from_battle_object_id(object.battle_object_id) {
-                        match category {
-                            BattleObjectCategory::Fighter => if hash != Hash40::new("fighter") { continue; },
-                            BattleObjectCategory::Weapon => if hash != Hash40::new("weapon") { continue; },
-                            _ => { continue; }
-                        }
-                    }
-                    else {
-                        continue;
-                    }
+    let object: &mut BattleObject = unsafe {std::mem::transmute(fighter.battle_object)};
+    let common_hash = if let Some(category) = BattleObjectCategory::from_battle_object_id(object.battle_object_id) {
+        match category {
+            BattleObjectCategory::Fighter => Some(Hash40::new("fighter")),
+            BattleObjectCategory::Weapon => Some(Hash40::new("weapon")),
+            _ => None
+        }
+    }
+    else {
+        None
+    };
+    let callbacks = STATUS_CALLBACKS.read();
+    if common_hash.is_some() {
+        if let Some(common_callbacks) = callbacks.get(&common_hash) {
+            for callback_fn in common_callbacks.iter() {
+                if let StatusCallbackFunction::Main(callback_fn) = callback_fn {
+                    callback_fn(fighter);
                 }
             }
-
-            callback_fn(fighter);
+        }
+    }
+    if let Some(agent_callbacks) = callbacks.get(&Some(agent)) {
+        for callback_fn in agent_callbacks.iter() {
+            if let StatusCallbackFunction::Main(callback_fn) = callback_fn {
+                callback_fn(fighter);
+            }
         }
     }
 }

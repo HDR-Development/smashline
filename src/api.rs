@@ -10,7 +10,7 @@ use smashline::{
 };
 
 use crate::{
-    callbacks::{StatusCallback, StatusCallbackFunction},
+    callbacks::StatusCallbackFunction,
     cloning::weapons::{NewAgent, NewArticle},
     create_agent::{
         AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
@@ -38,13 +38,15 @@ pub extern "C" fn smashline_remove_by_plugin_range(start: usize, end: usize) {
         });
 
     {
-        let mut callbacks = crate::callbacks::CALLBACKS.write();
+        let mut callbacks = crate::callbacks::STATUS_CALLBACKS.write();
 
-        let working = std::mem::take(&mut *callbacks);
-        *callbacks = working
-            .into_iter()
-            .filter(|cb| !(start..end).contains(&cb.function.as_address()))
-            .collect();
+        for callback_vec in callbacks.iter_mut() {
+            let working = std::mem::take(&mut *callback_vec.1);
+            *callback_vec.1 = working
+                .into_iter()
+                .filter(|cb| !(start..end).contains(&cb.as_address()))
+                .collect();
+        }
     }
 
     {
@@ -101,10 +103,14 @@ pub extern "C" fn smashline_install_line_callback(
 ) {
     let agent = agent.map(|value| Hash40(value.get()));
 
-    crate::callbacks::CALLBACKS.write().push(StatusCallback {
-        hash: agent,
-        function: StatusCallbackFunction::new(line, function),
-    });
+    let mut callbacks = crate::callbacks::STATUS_CALLBACKS.write();
+    let agent_callbacks = callbacks.get_mut(&agent);
+    if agent_callbacks.is_none() {
+        callbacks.insert(agent, vec![StatusCallbackFunction::new(line, function)]);
+    }
+    else {
+        agent_callbacks.unwrap().push(StatusCallbackFunction::new(line, function));
+    }
 }
 
 #[no_mangle]
