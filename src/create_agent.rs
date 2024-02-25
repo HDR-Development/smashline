@@ -27,7 +27,7 @@ use vtables::{CustomDataAccessError, VirtualClass};
 
 use crate::{
     cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
-    static_accessor::StaticArrayAccessor,
+    static_accessor::StaticArrayAccessor, callbacks::{CALLBACKS, StatusCallbackFunction}
 };
 
 #[allow(improper_ctypes)]
@@ -807,7 +807,25 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
         }
     }
 
+    let callbacks = CALLBACKS.read();
+    let mut status_callbacks = Vec::new();
+
+    for callback in callbacks.iter() {
+        if callback.hash == Some(hash) {
+            status_callbacks.push(callback.function);
+        }
+        if is_weapon && callback.hash == Some(Hash40::new("weapon")) {
+            status_callbacks.push(callback.function);
+        }
+        else if callback.hash == Some(Hash40::new("fighter")) {
+            status_callbacks.push(callback.function);
+        }
+    }
+
     let data = vtables::vtable_custom_data_mut::<_, L2CFighterWrapper>(agent.deref_mut());
+
+    data.status_callbacks = status_callbacks;
+
     data.original_statuses = original_statuses;
 
     let mut new_total = old_total;
@@ -875,6 +893,7 @@ struct L2CFighterWrapperData {
     original_statuses: HashMap<(StatusLine, i32), *const ()>,
     original_deleter: Option<extern "C" fn(&mut L2CFighterWrapper)>,
     original_set_status_scripts: Option<extern "C" fn(&mut L2CFighterWrapper)>,
+    status_callbacks: Vec<StatusCallbackFunction>
 }
 
 impl VirtualClass for L2CFighterWrapper {
@@ -1070,6 +1089,14 @@ pub(crate) fn original_status<'a>(
         Err(CustomDataAccessError::NotRelocated) => None,
         Err(e) => panic!("failed to get status scripts: {e}"),
     }
+}
+
+pub(crate) fn status_callbacks<'a>(
+    fighter: &'a L2CFighterBase,
+) -> Vec<StatusCallbackFunction> {
+    let wrapper: &'static L2CFighterWrapper = unsafe { std::mem::transmute(fighter) };
+    vtables::vtable_custom_data::<_, L2CFighterWrapper>(wrapper.deref())
+        .unwrap().status_callbacks.clone()
 }
 
 pub(crate) fn agent_hash(fighter: &L2CFighterBase) -> Hash40 {
