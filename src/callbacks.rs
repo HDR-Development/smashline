@@ -83,61 +83,55 @@ impl StatusCallbackFunction {
 pub static STATUS_CALLBACKS: RwLock<Lazy<HashMap<Option<Hash40>, Vec<StatusCallbackFunction>>>> = RwLock::new(Lazy::new(||HashMap::new()));
 
 #[inline(always)]
-fn call_callback(callback: Callback, agent: Option<Hash40>, ctx: &InlineCtx) {
-    let fighter: &'static mut L2CFighterBase =
-        unsafe { std::mem::transmute(*ctx.registers[0].x.as_ref()) };
-
-    if let Some(agent) = agent {
-        if agent != crate::create_agent::agent_hash(fighter) {
-            return;
-        }
-    }
-
+fn call_callback(fighter: &mut L2CFighterBase, callback: Callback, _ctx: &InlineCtx) {
     callback(fighter);
 }
 
 #[inline(always)]
-fn call_callback1(callback: Callback1, agent: Option<Hash40>, ctx: &InlineCtx) {
-    let fighter: &'static mut L2CFighterBase =
-        unsafe { std::mem::transmute(*ctx.registers[0].x.as_ref()) };
-
-    if let Some(agent) = agent {
-        if agent != crate::create_agent::agent_hash(fighter) {
-            return;
-        }
-    }
-
+fn call_callback1(fighter: &mut L2CFighterBase, callback: Callback1, ctx: &InlineCtx) {
     let arg = unsafe { std::mem::transmute(*ctx.registers[1].x.as_ref()) };
     callback(fighter, arg);
 }
 
 #[inline(always)]
-fn call_callback2(callback: Callback2, agent: Option<Hash40>, ctx: &InlineCtx) {
-    let fighter: &'static mut L2CFighterBase =
-        unsafe { std::mem::transmute(*ctx.registers[1].x.as_ref()) };
-
-    if let Some(agent) = agent {
-        if agent != crate::create_agent::agent_hash(fighter) {
-            return;
-        }
-    }
-
+fn call_callback2(fighter: &mut L2CFighterBase, callback: Callback2, ctx: &InlineCtx) {
     let arg = unsafe { std::mem::transmute(*ctx.registers[2].x.as_ref()) };
     let arg2 = unsafe { std::mem::transmute(*ctx.registers[3].x.as_ref()) };
     callback(fighter, arg, arg2);
 }
 
 macro_rules! decl_functions {
-    ($($name:ident($line:ident, $offset:expr, $code_cave:expr) => $call_fn:ident);*) => {
+    ($($name:ident($line:ident, $offset:expr, $code_cave:expr, $reg:expr) => $call_fn:ident);*) => {
         $(
             extern "C" fn $name(ctx: &InlineCtx) {
+                let fighter: &'static mut L2CFighterBase =
+                    unsafe { std::mem::transmute(*ctx.registers[$reg].x.as_ref()) };
+                let agent = crate::create_agent::agent_hash(fighter);
+                let object: &mut BattleObject = unsafe {std::mem::transmute(fighter.battle_object)};
+                let common_hash = if let Some(category) = BattleObjectCategory::from_battle_object_id(object.battle_object_id) {
+                    match category {
+                        BattleObjectCategory::Fighter => Some(Hash40::new("fighter")),
+                        BattleObjectCategory::Weapon => Some(Hash40::new("weapon")),
+                        _ => None
+                    }
+                }
+                else {
+                    None
+                };
                 let callbacks = STATUS_CALLBACKS.read();
-                for agent_callbacks in callbacks.iter() {
-                    let hash = agent_callbacks.0;
-                    let callback_vec = agent_callbacks.1;
-                    for function in callback_vec.iter() {
-                        if let StatusCallbackFunction::$line(callback_fn) = *function {
-                            $call_fn(callback_fn, *hash, ctx);
+                if common_hash.is_some() {
+                    if let Some(common_callbacks) = callbacks.get(&common_hash) {
+                        for callback_fn in common_callbacks.iter() {
+                            if let StatusCallbackFunction::$line(callback_fn) = *callback_fn {
+                                $call_fn(fighter, callback_fn, ctx);
+                            }
+                        }
+                    }
+                }
+                if let Some(agent_callbacks) = callbacks.get(&Some(agent)) {
+                    for callback_fn in agent_callbacks.iter() {
+                        if let StatusCallbackFunction::$line(callback_fn) = *callback_fn {
+                            $call_fn(fighter, callback_fn, ctx);
                         }
                     }
                 }
@@ -156,30 +150,30 @@ macro_rules! decl_functions {
 }
 
 decl_functions! {
-    call_init_hook(Init, 0x1bb4, 0x1a100) => call_callback;
-    call_pre_hook(Pre, 0x2560, 0x16086c) => call_callback;
-    call_post_hook(Post, 0x31d4, 0x160884) => call_callback;
-    call_post_hook2(Post, 0x321c, 0x1608a0) => call_callback;
-    // call_main_hook(Main, 0x32a4, 0x1608bc) => call_callback;
-    // call_main_hook2(Main, 0x32ec, 0x1608d4) => call_callback;
-    call_fix_camera_hook(FixCamera, 0x35e4, 0x1608ec) => call_callback;
-    call_fix_camera_hook2(FixCamera, 0x362c, 0x160904) => call_callback;
-    cal_map_correction_hook(MapCorrection, 0x36b4, 0x211afc) => call_callback;
-    cal_map_correction_hook2(MapCorrection, 0x36fc, 0x211b14) => call_callback;
-    call_fix_pos_slow_hook(FixPosSlow, 0x3784, 0x211b2c) => call_callback;
-    call_fix_pos_slow_hook2(FixPosSlow, 0x37cc, 0x211b44) => call_callback;
-    call_end_hook(End, 0x689c, 0x211b5c) => call_callback;
-    call_exit_hook(Exit, 0x6950, 0x211b74) => call_callback;
-    call_exec_stop_hook(ExecStop, 0x70e8, 0x211b90) => call_callback;
-    call_exec_hook(Exec, 0x7134, 0x211ba8) => call_callback;
-    call_exec_stop_hook2(ExecStop, 0x1a020, 0x2118c4) => call_callback;
-    call_exec_hook2(Exec, 0x1a06c, 0x2118dc) => call_callback;
-    call_calc_param_hook(CalcParam, 0x1a2a8, 0x2118f4) => call_callback;
-    call_notify_event_gimmick_hook(NotifyEventGimmick, 0x1a434, 0x21190c) => call_callback1;
-    call_leave_stop_hook(LeaveStop, 0x1a5dc, 0x211924) => call_callback2;
-    call_on_change_lr_hook(OnChangeLr, 0x1a77c, 0x1a7b0) => call_callback2;
-    call_check_attack_hook(CheckAttack, 0x1ab30, 0x2aabf0) => call_callback2;
-    call_check_damage_hook(CheckDamage, 0x1b414, 0x2aac08) => call_callback1
+    call_init_hook(Init, 0x1bb4, 0x1a100, 0) => call_callback;
+    call_pre_hook(Pre, 0x2560, 0x16086c, 0) => call_callback;
+    call_post_hook(Post, 0x31d4, 0x160884, 0) => call_callback;
+    call_post_hook2(Post, 0x321c, 0x1608a0, 0) => call_callback;
+    // call_main_hook(Main, 0x32a4, 0x1608bc, 0) => call_callback;
+    // call_main_hook2(Main, 0x32ec, 0x1608d4, 0) => call_callback;
+    call_fix_camera_hook(FixCamera, 0x35e4, 0x1608ec, 0) => call_callback;
+    call_fix_camera_hook2(FixCamera, 0x362c, 0x160904, 0) => call_callback;
+    cal_map_correction_hook(MapCorrection, 0x36b4, 0x211afc, 0) => call_callback;
+    cal_map_correction_hook2(MapCorrection, 0x36fc, 0x211b14, 0) => call_callback;
+    call_fix_pos_slow_hook(FixPosSlow, 0x3784, 0x211b2c, 0) => call_callback;
+    call_fix_pos_slow_hook2(FixPosSlow, 0x37cc, 0x211b44, 0) => call_callback;
+    call_end_hook(End, 0x689c, 0x211b5c, 0) => call_callback;
+    call_exit_hook(Exit, 0x6950, 0x211b74, 0) => call_callback;
+    call_exec_stop_hook(ExecStop, 0x70e8, 0x211b90, 0) => call_callback;
+    call_exec_hook(Exec, 0x7134, 0x211ba8, 0) => call_callback;
+    call_exec_stop_hook2(ExecStop, 0x1a020, 0x2118c4, 0) => call_callback;
+    call_exec_hook2(Exec, 0x1a06c, 0x2118dc, 0) => call_callback;
+    call_calc_param_hook(CalcParam, 0x1a2a8, 0x2118f4, 0) => call_callback;
+    call_notify_event_gimmick_hook(NotifyEventGimmick, 0x1a434, 0x21190c, 0) => call_callback1;
+    call_leave_stop_hook(LeaveStop, 0x1a5dc, 0x211924, 1) => call_callback2;
+    call_on_change_lr_hook(OnChangeLr, 0x1a77c, 0x1a7b0, 1) => call_callback2;
+    call_check_attack_hook(CheckAttack, 0x1ab30, 0x2aabf0, 1) => call_callback2;
+    call_check_damage_hook(CheckDamage, 0x1b414, 0x2aac08, 0) => call_callback1
 }
 
 // main is handled differently so that we can call it after
