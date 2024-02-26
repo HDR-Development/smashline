@@ -322,6 +322,14 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
         return;
     }
 
+    let whitelisted_params = WHITELISTED_PARAMS.read();
+    let new_articles = NEW_ARTICLES.read();
+
+    if whitelisted_params.get(&fighter_id).is_none()
+    && new_articles.get(&fighter_id).is_none() {
+        return;
+    }
+
     let Some(_) = crate::create_agent::LOWERCASE_FIGHTER_NAMES.get(fighter_id as usize) else {
         return;
     };
@@ -353,9 +361,9 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
     let mut remap_names = HashMap::new();
 
     let new_agents = NEW_AGENTS.read();
-    if let Some(new_articles) = NEW_ARTICLES.read().get(&fighter_id) {
-        for new_article in new_articles.iter() {
-            if let Some(agent) = try_get_new_agent(&new_agents, new_article.weapon_id, fighter_id) {
+    if let Some(articles) = new_articles.get(&fighter_id) {
+        for article in articles.iter() {
+            if let Some(agent) = try_get_new_agent(&new_agents, article.weapon_id, fighter_id) {
                 allowed_names.push(Hash40::new(&format!("param_{}", agent.new_name)).0);
                 remap_names.insert(
                     Hash40::new(&format!("param_{}", agent.old_name)).0,
@@ -365,7 +373,7 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
         }
     }
 
-    if let Some(whitelist) = WHITELISTED_PARAMS.read().get(&fighter_id) {
+    if let Some(whitelist) = whitelisted_params.get(&fighter_id) {
         allowed_names.extend(whitelist.iter().map(|x| x.0));
     }
 
