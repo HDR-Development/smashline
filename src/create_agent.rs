@@ -814,11 +814,15 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
         if callback.hash == Some(hash) {
             status_callbacks.push(callback.function);
         }
-        if is_weapon && callback.hash == Some(Hash40::new("weapon")) {
-            status_callbacks.push(callback.function);
+        else if is_weapon {
+            if callback.hash == Some(Hash40::new("weapon")) {
+                status_callbacks.push(callback.function);
+            }
         }
-        else if callback.hash == Some(Hash40::new("fighter")) {
-            status_callbacks.push(callback.function);
+        else {
+            if callback.hash == Some(Hash40::new("fighter")) {
+                status_callbacks.push(callback.function);
+            }
         }
     }
 
