@@ -61,7 +61,38 @@ unsafe fn load_fighter_effects(ctx: &InlineCtx) {
     }
 }
 
+#[skyline::hook(offset = 0x14db7d4, inline)]
+unsafe fn load_common_item_effects(ctx: &InlineCtx) {
+    let info = resources::types::FilesystemInfo::instance().unwrap();
+    let search = info.search();
+    let full_name = Hash40(hash40("effect/system/addons"));
+    let Ok(first_child) = search.get_first_child_in_folder(smash_arc::Hash40(full_name.0)) else {
+        return
+    };
+    let mut current_child = first_child;
+    let mut num_transplants = 1;
+    loop {
+        let Ok(path_index) = search.get_path_index_from_hash(smash_arc::Hash40(current_child.path.hash40().0)) else {
+            break;
+        };
+        let index = path_index.index();
+        num_transplants += 1;
+        let _result = load_effects(
+            *ctx.registers[0].x.as_ref() as _,
+            *ctx.registers[1].x.as_ref() as u32 + num_transplants,
+            &index,
+        );
+        let Ok(next_child) = search.get_next_child_in_folder(current_child) else {
+            break;
+        };
+        current_child = next_child;
+    }
+}
+
 pub fn install_effect_transplant_hooks() {
     skyline::patching::Patch::in_text(0x60bfd8).nop().unwrap();
-    skyline::install_hook!(load_fighter_effects);
+    skyline::install_hooks!(
+        load_fighter_effects,
+        load_common_item_effects
+    );
 }
