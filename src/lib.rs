@@ -174,7 +174,7 @@ pub extern "C" fn main() {
         let err_msg = format!("smashline has panicked: '{}', {}", msg, location);
         skyline::error::show_error(
             69,
-            "Smashline has panicked! Please PayPal $10 to the.blu.dev@gmail.com to fix it :)",
+            "Smashline has panicked! Please open Details and post an issue at https://github.com/HDR-Development/smashline.",
             err_msg.as_str(),
         );
     }));
