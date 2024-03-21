@@ -61,7 +61,7 @@ unsafe fn load_fighter_effects(ctx: &InlineCtx) {
     }
 }
 
-#[skyline::hook(offset = 0x14db744, inline)]
+#[skyline::hook(offset = 0x14db7d4, inline)]
 unsafe fn load_common_item_effects(ctx: &InlineCtx) {
     let info = resources::types::FilesystemInfo::instance().unwrap();
     let search = info.search();
