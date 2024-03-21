@@ -14,7 +14,7 @@ proc-macro-crate = "1.3.1"
 proc-macro-error = "1"
 proc-macro2 = "1"
 quote = "1"
-skyline = "0.2"
+skyline = "0.2.1"
 syn = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4"] }
 
@@ -34,7 +34,7 @@ crate-type = ["cdylib"]
 acmd-engine = { path = "crates/acmd-engine" }
 skyline.workspace = true
 smashline = { path = "crates/smashline", features = ["smash-rs"] }
-smash = { git = "https://github.com/blu-dev/smash-rs" }
+smash = { git = "https://github.com/ClaudevonRiegan/smash-rs" }
 locks.path = "crates/locks"
 paste = "1"
 vtables.path = "crates/vtables"
@@ -43,7 +43,7 @@ rtld.path = "crates/rtld"
 once_cell = "1"
 prc-rs = { version = "1.6.1", features = ["indexmap-std"] }
 resources.path = "crates/resources"
-smash_script = { git = "https://github.com/blu-dev/smash-script", branch = "development" }
+smash_script = { git = "https://github.com/ClaudevonRiegan/smash-script", branch = "development" }
 
 [patch.'https://github.com/BenHall-7/hash40-rs']
 hash40 = { git = "https://github.com/blu-dev/hash40-rs", branch = "patch-1" }
