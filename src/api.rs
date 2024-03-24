@@ -21,21 +21,13 @@ use crate::{
 
 #[no_mangle]
 pub extern "C" fn smashline_remove_by_plugin_range(start: usize, end: usize) {
-    crate::create_agent::ACMD_SCRIPTS
+    crate::create_agent::ACMD_SCRIPTS_DEV
         .write()
-        .values_mut()
-        .for_each(|scripts| scripts.remove_by_module_range(start, end));
+        .clear();
 
-    crate::create_agent::STATUS_SCRIPTS
+    crate::create_agent::STATUS_SCRIPTS_DEV
         .write()
-        .values_mut()
-        .for_each(|functions| {
-            let working = std::mem::take(functions);
-            *functions = working
-                .into_iter()
-                .filter(|script| !(start..end).contains(&script.function.as_address()))
-                .collect();
-        });
+        .clear();
 
     {
         let mut callbacks = crate::callbacks::CALLBACKS.write();
@@ -65,6 +57,14 @@ pub extern "C" fn smashline_install_acmd_script(
     priority: Priority,
     function: unsafe extern "C" fn(&mut L2CAgentBase),
 ) {
+    if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
+        crate::create_agent::ACMD_SCRIPTS_DEV
+            .write()
+            .entry(agent)
+            .or_default()
+            .set_script(script, category, AcmdScript { function, priority });
+        return;
+    }
     crate::create_agent::ACMD_SCRIPTS
         .write()
         .entry(agent)
@@ -83,6 +83,17 @@ pub extern "C" fn smashline_install_status_script(
         .map(|x| Hash40(x.get()))
         .unwrap_or(Hash40::new("common"));
 
+    if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
+        crate::create_agent::STATUS_SCRIPTS_DEV
+            .write()
+            .entry(agent)
+            .or_default()
+            .push(StatusScript {
+                id: status,
+                function: StatusScriptFunction::from_line(line, function),
+            });
+        return;
+    }
     crate::create_agent::STATUS_SCRIPTS
         .write()
         .entry(agent)
