@@ -26,6 +26,8 @@ extern "C" {
 
 static LOADED_DEVELOPMENT_PLUGIN: Mutex<Option<DevelopmentPlugin>> = Mutex::new(None);
 
+pub static mut LOADING_DEVELOPMENT_SCRIPTS: bool = false;
+
 const NRR_SIZE: usize = std::mem::size_of::<NrrHeader>();
 
 impl DevelopmentPlugin {
@@ -144,8 +146,10 @@ impl DevelopmentPlugin {
         if rc != 0 {
             panic!("Smashline development plugin does not export 'smashline_install'");
         } else {
+            LOADING_DEVELOPMENT_SCRIPTS = true;
             let callable: fn() = std::mem::transmute(install_fn);
-            callable()
+            callable();
+            LOADING_DEVELOPMENT_SCRIPTS = false;
         }
     }
 
