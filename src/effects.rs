@@ -49,7 +49,7 @@ unsafe fn load_fighter_effects(ctx: &InlineCtx) {
 
         let _result = load_effects(
             *ctx.registers[0].x.as_ref() as _,
-            *ctx.registers[1].x.as_ref() as u32 + num_transplants,
+            *ctx.registers[1].x.as_ref() as u32 + num_transplants * 2000,
             &index,
         );
 
