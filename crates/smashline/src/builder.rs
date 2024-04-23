@@ -1,6 +1,9 @@
 use crate::{AsHash40, ObjectEvent, Priority, StatusLine};
 
 pub type AcmdFunction = unsafe extern "C" fn(&mut crate::L2CAgentBase);
+
+pub unsafe extern "C" fn acmd_stub(_agent: &mut crate::L2CAgentBase) {}
+
 pub type StateFunction<T> = unsafe extern "C" fn(&mut T);
 
 mod __sealed {
