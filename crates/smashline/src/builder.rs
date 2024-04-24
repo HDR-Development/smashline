@@ -1,6 +1,9 @@
 use crate::{AsHash40, ObjectEvent, Priority, StatusLine};
 
 pub type AcmdFunction = unsafe extern "C" fn(&mut crate::L2CAgentBase);
+
+pub unsafe extern "C" fn acmd_stub(_agent: &mut crate::L2CAgentBase) {}
+
 pub type StateFunction<T> = unsafe extern "C" fn(&mut T);
 
 mod __sealed {
@@ -68,6 +71,7 @@ struct AcmdScript {
     category: crate::Acmd,
     replaces: crate::Hash40,
     function: AcmdFunction,
+    priority: Priority
 }
 
 struct LineCallback {
@@ -105,7 +109,7 @@ impl Agent {
         }
     }
 
-    pub fn acmd(&mut self, name: &str, function: AcmdFunction) -> &mut Self {
+    pub fn acmd(&mut self, name: &str, function: AcmdFunction, priority: Priority) -> &mut Self {
         let category = if name.starts_with("game") {
             Some(crate::Acmd::Game)
         }
@@ -126,6 +130,7 @@ impl Agent {
                 category: category.unwrap(),
                 replaces: name.as_hash40(),
                 function,
+                priority,
             });
         }
         else {
@@ -134,39 +139,43 @@ impl Agent {
         self
     }
 
-    pub fn game_acmd(&mut self, name: impl AsHash40, function: AcmdFunction) -> &mut Self {
+    pub fn game_acmd(&mut self, name: impl AsHash40, function: AcmdFunction, priority: Priority) -> &mut Self {
         self.acmd.push(AcmdScript {
             category: crate::Acmd::Game,
             replaces: name.as_hash40(),
             function,
+            priority
         });
         self
     }
 
-    pub fn effect_acmd(&mut self, name: impl AsHash40, function: AcmdFunction) -> &mut Self {
+    pub fn effect_acmd(&mut self, name: impl AsHash40, function: AcmdFunction, priority: Priority) -> &mut Self {
         self.acmd.push(AcmdScript {
             category: crate::Acmd::Effect,
             replaces: name.as_hash40(),
             function,
+            priority
         });
         self
     }
 
-    pub fn sound_acmd(&mut self, name: impl AsHash40, function: AcmdFunction) -> &mut Self {
+    pub fn sound_acmd(&mut self, name: impl AsHash40, function: AcmdFunction, priority: Priority) -> &mut Self {
         self.acmd.push(AcmdScript {
             category: crate::Acmd::Sound,
             replaces: name.as_hash40(),
             function,
+            priority
         });
 
         self
     }
 
-    pub fn expression_acmd(&mut self, name: impl AsHash40, function: AcmdFunction) -> &mut Self {
+    pub fn expression_acmd(&mut self, name: impl AsHash40, function: AcmdFunction, priority: Priority) -> &mut Self {
         self.acmd.push(AcmdScript {
             category: crate::Acmd::Expression,
             replaces: name.as_hash40(),
             function,
+            priority
         });
 
         self
@@ -242,7 +251,7 @@ impl Agent {
                 self.kind_hash,
                 acmd.replaces,
                 acmd.category,
-                Priority::Default,
+                acmd.priority,
                 acmd.function,
             );
         }

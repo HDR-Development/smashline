@@ -1,11 +1,8 @@
 use std::{
-    collections::{BTreeMap, HashMap},
-    ops::{Deref, DerefMut},
-    sync::{
+    borrow::BorrowMut, collections::{BTreeMap, HashMap}, ops::{Deref, DerefMut}, sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
-    },
-    time::Duration,
+    }, time::Duration
 };
 
 use acmd_engine::SmashlineScript;
@@ -207,10 +204,10 @@ impl AcmdScripts {
 
     pub fn set_script(&mut self, name: Hash40, category: Acmd, script: AcmdScript) {
         let _ = match category {
-            Acmd::Game => self.game.insert(name, script),
-            Acmd::Effect => self.effect.insert(name, script),
-            Acmd::Sound => self.sound.insert(name, script),
-            Acmd::Expression => self.expression.insert(name, script),
+            Acmd::Game => check_installed_script(self.game.borrow_mut(), name, category, script),
+            Acmd::Effect => check_installed_script(self.effect.borrow_mut(), name, category, script),
+            Acmd::Sound => check_installed_script(self.sound.borrow_mut(), name, category, script),
+            Acmd::Expression => check_installed_script(self.expression.borrow_mut(), name, category, script),
         };
     }
 
@@ -221,6 +218,22 @@ impl AcmdScripts {
             Acmd::Sound => self.sound.iter(),
             Acmd::Expression => self.expression.iter(),
         }
+    }
+}
+
+fn check_installed_script(acmd_map: &mut AcmdScriptSet, name: Hash40, category: Acmd, script: AcmdScript) -> Option<AcmdScript> {
+    if let Some((_, script_old)) = acmd_map.get_key_value(&name) {
+        if script_old.priority < script.priority {
+            println!("[smashline] Script {:#x} of {} {} replaced by {}", name.0, category, script_old.priority, script.priority);
+            acmd_map.insert(name, script)
+        }
+        else {
+            println!("[smashline] Script {:#x} of {} already replaced with {}", name.0, category, script.priority);
+            None
+        }
+    }
+    else {
+        acmd_map.insert(name, script)
     }
 }
 

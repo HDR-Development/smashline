@@ -30,11 +30,21 @@ pub use smash_rs::{
 pub use locks;
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub enum Priority {
-    Default,
     Low,
+    Default,
     High,
+}
+
+impl std::fmt::Display for Priority {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+       match self {
+           Priority::Low => write!(f, "Low Priority"),
+           Priority::Default => write!(f, "Default Priority"),
+           Priority::High => write!(f, "High Priority"),
+       }
+    }
 }
 
 #[repr(C)]
@@ -44,6 +54,17 @@ pub enum Acmd {
     Effect,
     Sound,
     Expression,
+}
+
+impl std::fmt::Display for Acmd {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+       match self {
+           Acmd::Game => write!(f, "Category Game"),
+           Acmd::Effect => write!(f, "Category Effect"),
+           Acmd::Sound => write!(f, "Category Sound"),
+           Acmd::Expression => write!(f, "Category Expression"),
+       }
+    }
 }
 
 impl PartialEq<acmd_engine::asset::Category> for Acmd {
