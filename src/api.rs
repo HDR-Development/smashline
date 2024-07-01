@@ -247,6 +247,18 @@ pub extern "C" fn smashline_clone_weapon(
         return id as i32;
     }
 
+    for agents in new_agents.values() {
+        if let Some(agent) = agents.iter().find(|agent| 
+            agent.owner_name == new_owner && agent.new_name == new_name
+        ) {
+            let owner = LOWERCASE_FIGHTER_NAMES.get(agent.old_owner_id as usize).unwrap();
+            panic!(
+                "Weapon with the name '{}_{}' has already been cloned, but using '{}_{}' instead of '{}_{}'", 
+                new_owner, new_name, owner, agent.old_name, original_owner, original_name
+            );
+        }
+    }
+
     new_agents
         .entry(original_name_id as i32)
         .or_default()
