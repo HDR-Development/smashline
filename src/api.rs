@@ -212,7 +212,7 @@ pub extern "C" fn smashline_clone_weapon(
     new_owner: StringFFI,
     new_name: StringFFI,
     use_original_code: bool,
-) {
+) -> i32 {
     let original_owner = original_owner.as_str().unwrap().to_string();
     let original_name = original_name.as_str().unwrap().to_string();
     let new_owner = new_owner.as_str().unwrap().to_string();
@@ -233,8 +233,21 @@ pub extern "C" fn smashline_clone_weapon(
         .position(|name| name == new_owner)
         .unwrap();
 
-    crate::cloning::weapons::NEW_AGENTS
-        .write()
+    let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
+
+    let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
+    let articles = new_articles
+        .entry(new_owner_id as i32)
+        .or_default();
+
+    if let Some(id) = articles.iter().position(|article|
+        article.original_owner == original_owner_id as i32 &&
+        article.weapon_id == original_name_id as i32
+    ) {
+        return id as i32;
+    }
+
+    new_agents
         .entry(original_name_id as i32)
         .or_default()
         .push(NewAgent {
@@ -248,12 +261,11 @@ pub extern "C" fn smashline_clone_weapon(
             use_original_code,
         });
 
-    crate::cloning::weapons::NEW_ARTICLES
-        .write()
-        .entry(new_owner_id as i32)
-        .or_default()
-        .push(NewArticle {
-            original_owner: original_owner_id as i32,
-            weapon_id: original_name_id as i32,
-        });
+    let id = articles.len();
+    articles.push(NewArticle {
+        original_owner: original_owner_id as i32,
+        weapon_id: original_name_id as i32,
+    });
+
+    id as i32
 }
