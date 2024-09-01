@@ -27,6 +27,8 @@ pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BT
 pub static NEW_AGENTS: RwLock<BTreeMap<i32, Vec<NewAgent>>> = RwLock::new(BTreeMap::new());
 pub static IGNORE_NEW_AGENTS: AtomicBool = AtomicBool::new(false);
 
+pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
+
 pub fn try_get_new_agent(
     map: &BTreeMap<i32, Vec<NewAgent>>,
     weapon: i32,
@@ -101,10 +103,18 @@ impl StaticFighterData {
 fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     let original_data: *const StaticFighterData = call_original!(kind);
 
-    if let Some(new_articles) = NEW_ARTICLES.read().get(&kind) {
-        let mut new_descriptors = vec![];
+    let mut new_descriptors = vec![];
 
-        new_descriptors.extend_from_slice(unsafe { (*original_data).articles_as_slice() });
+    new_descriptors.extend_from_slice(unsafe { (*original_data).articles_as_slice() });
+
+    for article in new_descriptors.iter_mut() {
+        let weapon_count = WEAPON_COUNT_UPDATE.read();
+        if let Some(new_count) = weapon_count.get(&article.weapon_id) {
+            article.max_count = *new_count;
+        }
+    }
+
+    if let Some(new_articles) = NEW_ARTICLES.read().get(&kind) {
 
         for article in new_articles.iter() {
             let source_data = call_original!(article.original_owner);
@@ -117,20 +127,18 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
                 new_descriptors.push(article);
             }
         }
-
-        let count = new_descriptors.len();
-        let ptr = new_descriptors.leak().as_ptr();
-        let static_article_info = Box::leak(Box::new(StaticArticleData {
-            descriptors: ptr,
-            count,
-        }));
-
-        let mut new_fighter_data = Box::new(unsafe { *original_data });
-        new_fighter_data.static_article_info = static_article_info as *const StaticArticleData;
-        Box::leak(new_fighter_data)
-    } else {
-        original_data
     }
+
+    let count = new_descriptors.len();
+    let ptr = new_descriptors.leak().as_ptr();
+    let static_article_info = Box::leak(Box::new(StaticArticleData {
+        descriptors: ptr,
+        count,
+    }));
+
+    let mut new_fighter_data = Box::new(unsafe { *original_data });
+    new_fighter_data.static_article_info = static_article_info as *const StaticArticleData;
+    Box::leak(new_fighter_data)
 }
 
 fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {

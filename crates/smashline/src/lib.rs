@@ -345,6 +345,11 @@ decl_imports! {
         use_original_code: bool
     );
 
+    fn smashline_update_weapon_count(
+        article_id: i32,
+        new_count: i32
+    );
+
     fn smashline_add_param_object(
         fighter_name: StringFFI,
         object: StringFFI
@@ -383,6 +388,16 @@ pub fn clone_weapon(
         StringFFI::from_str(new_owner),
         StringFFI::from_str(new_name),
         use_original_code,
+    );
+}
+
+pub fn update_weapon_count(
+    article_id: i32,
+    new_count: i32
+) {
+    smashline_update_weapon_count(
+        article_id,
+        new_count
     );
 }
 

@@ -14,7 +14,7 @@ use crate::{
     cloning::weapons::{NewAgent, NewArticle},
     create_agent::{
         AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
-        LOWERCASE_WEAPON_NAMES,
+        LOWERCASE_WEAPON_NAMES
     },
     state_callback::{StateCallback, StateCallbackFunction},
 };
@@ -256,4 +256,15 @@ pub extern "C" fn smashline_clone_weapon(
             original_owner: original_owner_id as i32,
             weapon_id: original_name_id as i32,
         });
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_update_weapon_count(
+    article_id: i32,
+    new_count: i32
+) {
+    *crate::cloning::weapons::WEAPON_COUNT_UPDATE
+        .write()
+        .entry(article_id)
+        .or_default() = new_count;
 }
