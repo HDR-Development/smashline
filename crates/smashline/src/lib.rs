@@ -343,7 +343,7 @@ decl_imports! {
         new_owner: StringFFI,
         new_name: StringFFI,
         use_original_code: bool
-    );
+    ) -> i32;
 
     fn smashline_update_weapon_count(
         article_id: i32,
@@ -381,14 +381,14 @@ pub fn clone_weapon(
     new_owner: impl Into<String>,
     new_name: impl Into<String>,
     use_original_code: bool,
-) {
+) -> i32 {
     smashline_clone_weapon(
         StringFFI::from_str(original_owner),
         original_article_id,
         StringFFI::from_str(new_owner),
         StringFFI::from_str(new_name),
         use_original_code,
-    );
+    )
 }
 
 pub fn update_weapon_count(
