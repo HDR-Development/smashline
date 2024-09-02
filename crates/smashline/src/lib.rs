@@ -339,11 +339,16 @@ decl_imports! {
 
     fn smashline_clone_weapon(
         original_owner: StringFFI,
-        original_name: StringFFI,
+        original_article_id: i32,
         new_owner: StringFFI,
         new_name: StringFFI,
         use_original_code: bool
     ) -> i32;
+
+    fn smashline_update_weapon_count(
+        article_id: i32,
+        new_count: i32
+    );
 
     fn smashline_add_param_object(
         fighter_name: StringFFI,
@@ -372,18 +377,28 @@ pub fn original_status<L: StatusLineMarker, T>(
 
 pub fn clone_weapon(
     original_owner: impl Into<String>,
-    original_name: impl Into<String>,
+    original_article_id: i32,
     new_owner: impl Into<String>,
     new_name: impl Into<String>,
     use_original_code: bool,
 ) -> i32 {
     smashline_clone_weapon(
         StringFFI::from_str(original_owner),
-        StringFFI::from_str(original_name),
+        original_article_id,
         StringFFI::from_str(new_owner),
         StringFFI::from_str(new_name),
         use_original_code,
     )
+}
+
+pub fn update_weapon_count(
+    article_id: i32,
+    new_count: i32
+) {
+    smashline_update_weapon_count(
+        article_id,
+        new_count
+    );
 }
 
 pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
