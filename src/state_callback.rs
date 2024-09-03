@@ -78,6 +78,7 @@ unsafe fn start_module_accessor_end(ctx: &mut InlineCtx) {
 
 pub fn install_state_callback_hooks() {
     skyline::install_hooks!(
+        lua_module_start_lua2cpp,
         lua_module_end,
         lua_module_initialize_lua2cpp,
         lua_module_finalize_lua2cpp,
