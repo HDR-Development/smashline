@@ -40,6 +40,13 @@ fn call_state_callback(agent: &mut L2CFighterBase, event: ObjectEvent) {
     }
 }
 
+pub static mut CAN_RUN_ON_START : bool = false;
+
+#[skyline::hook(offset = 0x48ad04, inline)]
+unsafe fn lua_module_start_lua2cpp(ctx: &InlineCtx) {
+    CAN_RUN_ON_START = true;
+}
+
 #[skyline::hook(offset = 0x48ada0)]
 unsafe fn lua_module_end(lua_module: *const u64) {
     let agent = std::mem::transmute(*lua_module.add(0x1d8 / 8));
@@ -60,13 +67,13 @@ unsafe fn lua_module_finalize_lua2cpp(ctx: &InlineCtx) {
 
 #[skyline::hook(offset = 0x3afde0, inline)]
 unsafe fn start_module_accessor_end(ctx: &mut InlineCtx) {
-    let boma = *ctx.registers[19].x.as_mut();
-    let lua_module = *(boma as *mut u64).add(0x190 / 8);
-    let agent = *((lua_module + 0x1D8) as *mut *mut L2CFighterBase);
-    if !agent.is_null() {
-        let agent = std::mem::transmute(agent);
+    if CAN_RUN_ON_START {
+        let boma = *ctx.registers[19].x.as_mut();
+        let lua_module = *(boma as *mut u64).add(0x190 / 8);
+        let agent = std::mem::transmute(*((lua_module + 0x1D8) as *mut *mut L2CFighterBase));
         call_state_callback(agent, ObjectEvent::Start);
     }
+    CAN_RUN_ON_START = false;
 }
 
 pub fn install_state_callback_hooks() {
