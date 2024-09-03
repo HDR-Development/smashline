@@ -43,7 +43,7 @@ fn call_state_callback(agent: &mut L2CFighterBase, event: ObjectEvent) {
 pub static mut CAN_RUN_ON_START : bool = false;
 
 #[skyline::hook(offset = 0x48ad04, inline)]
-unsafe fn lua_module_start_lua2cpp(ctx: &InlineCtx) {
+unsafe fn lua_module_start_lua2cpp(_ctx: &InlineCtx) {
     CAN_RUN_ON_START = true;
 }
 
