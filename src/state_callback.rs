@@ -40,14 +40,6 @@ fn call_state_callback(agent: &mut L2CFighterBase, event: ObjectEvent) {
     }
 }
 
-pub static mut CURRENT_AGENT_BASE : u64 = 0;
-
-#[skyline::hook(offset = 0x48ad04, inline)]
-unsafe fn lua_module_start_lua2cpp(ctx: &InlineCtx) {
-    let module = *ctx.registers[19].x.as_ref() as *const u64;
-    CURRENT_AGENT_BASE = *module.add(0x1d8 / 8);
-}
-
 #[skyline::hook(offset = 0x48ada0)]
 unsafe fn lua_module_end(lua_module: *const u64) {
     let agent = std::mem::transmute(*lua_module.add(0x1d8 / 8));
@@ -66,15 +58,19 @@ unsafe fn lua_module_finalize_lua2cpp(ctx: &InlineCtx) {
     call_state_callback(agent, ObjectEvent::Finalize);
 }
 
-#[skyline::hook(offset = 0x3afdf4, inline)]
-unsafe fn start_module_accessor_end(ctx: &InlineCtx) {
-    let agent = std::mem::transmute(CURRENT_AGENT_BASE);
-    call_state_callback(agent, ObjectEvent::Start);
+#[skyline::hook(offset = 0x3afde0, inline)]
+unsafe fn start_module_accessor_end(ctx: &mut InlineCtx) {
+    let boma = *ctx.registers[19].x.as_mut();
+    let lua_module = *(boma as *mut u64).add(0x190 / 8);
+    let agent = *((lua_module + 0x1D8) as *mut *mut L2CFighterBase);
+    if !agent.is_null() {
+        let agent = std::mem::transmute(agent);
+        call_state_callback(agent, ObjectEvent::Start);
+    }
 }
 
 pub fn install_state_callback_hooks() {
     skyline::install_hooks!(
-        lua_module_start_lua2cpp,
         lua_module_end,
         lua_module_initialize_lua2cpp,
         lua_module_finalize_lua2cpp,
