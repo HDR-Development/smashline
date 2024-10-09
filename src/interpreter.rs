@@ -238,12 +238,12 @@ unsafe fn call_coroutine_hook(ctx: &mut InlineCtx) {
 }
 
 static mut CALLING: Option<Hash40> = None;
-#[skyline::hook(offset = 0x372d750, inline)]
+#[skyline::hook(offset = 0x372d770, inline)]
 unsafe fn call_function_by_hash(ctx: &InlineCtx) {
     CALLING = Some(Hash40(*ctx.registers[1].x.as_ref()));
 }
 
-#[skyline::hook(offset = 0x372d8d4, inline)]
+#[skyline::hook(offset = 0x372d8f4, inline)]
 unsafe fn call_by_hash_hook(ctx: &mut InlineCtx) {
     if let Some(calling) = CALLING.take() {
         // NOTE: This logic is very fragile, but its the quickest work around I can come up
