@@ -1,0 +1,1 @@
+searchState.loadedDescShard("vtable_macro", 0, "")
