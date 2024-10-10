@@ -53,7 +53,7 @@ impl DevelopmentPlugin {
         let nro_image = {
             let new_mem = libc::memalign(0x1000, nro_image.len()) as *mut u8;
             std::ptr::copy_nonoverlapping(nro_image.as_ptr(), new_mem, nro_image.len());
-            new_mem as *const libc::c_void
+            new_mem as *const u8
         };
 
         let mut bss_size = 0u64;
@@ -108,7 +108,7 @@ impl DevelopmentPlugin {
         let rc = ro::LoadModule(
             nro_module.as_mut_ptr(),
             nro_image,
-            bss_section,
+            bss_section as *mut u8,
             bss_size as u64,
             ro::BindFlag_BindFlag_Now as i32,
         );
@@ -221,7 +221,7 @@ unsafe fn get_game_state() -> *const u64 {
 
 static mut LAST_RUN_INSTANT: Option<Instant> = None;
 
-#[skyline::hook(offset = 0x3666b10, inline)]
+#[skyline::hook(offset = 0x3666b30, inline)]
 unsafe fn process_inputs_hook(ctx: &skyline::hooks::InlineCtx) {
     const INPUT: u32 = 0x20C0;
     if !get_game_state().is_null() {
