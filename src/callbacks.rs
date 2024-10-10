@@ -109,6 +109,8 @@ macro_rules! decl_functions {
             extern "C" fn $name(ctx: &InlineCtx) {
                 let fighter: &'static mut L2CFighterBase =
                     unsafe { std::mem::transmute(*ctx.registers[$reg].x.as_ref()) };
+                    
+                let fighter = std::hint::black_box(fighter);
 
                 let callbacks = crate::create_agent::status_callbacks(fighter);
 
