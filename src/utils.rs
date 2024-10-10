@@ -53,7 +53,7 @@ struct MyDeque {
     len: usize,
 }
 
-#[skyline::from_offset(0x22b59a0)]
+#[skyline::from_offset(0x22b59c0)]
 fn extend_deque(deque: *mut MyDeque);
 
 extern "C" {
@@ -137,7 +137,7 @@ pub fn load_fighter_module(kind: i32) {
     }
 }
 
-#[skyline::from_offset(0x22b6f40)]
+#[skyline::from_offset(0x22b6f60)]
 fn dynamic_module_manager_unload(manager: *mut u64, name: &Hash40);
 
 pub fn unload_fighter_module(id: i32) {
@@ -171,13 +171,13 @@ pub fn is_fighter_module_loaded(id: i32) -> bool {
     }
 }
 
-#[skyline::from_offset(0x353e580)]
+#[skyline::from_offset(0x353e5a0)]
 fn get_search_path_index(index: &mut u32, bytes: *const u8);
 
-#[skyline::from_offset(0x353e730)]
+#[skyline::from_offset(0x353e750)]
 fn get_file_path_from_search_path(search_path: u32) -> u32;
 
-#[skyline::from_offset(0x35406a0)]
+#[skyline::from_offset(0x35406c0)]
 fn add_to_res_service(filesystem: *mut u64, file_path: u32);
 
 fn get_filesystem() -> *mut u64 {

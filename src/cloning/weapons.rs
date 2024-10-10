@@ -210,32 +210,32 @@ macro_rules! decl_hooks {
 
 decl_hooks! {
     install_weapon_owner_hooks => weapon_owner_hook;
-    params(21, 26, 0x33b6878);
-    game_animcmd_owner(22, 8, 0x33ad1c8);
-    sound_animcmd_owner(22, 8, 0x33af088);
-    effect_animcmd_owner(22, 8, 0x33ae128);
-    status_script_owner(22, 8, 0x33ac290)
+    params(21, 26, 0x33b6898);
+    game_animcmd_owner(22, 8, 0x33ad1e8);
+    sound_animcmd_owner(22, 8, 0x33af0a8);
+    effect_animcmd_owner(22, 8, 0x33ae148);
+    status_script_owner(22, 8, 0x33ac2b0)
 }
 
 decl_hooks! {
     install_weapon_owner_name_hooks => weapon_owner_name_hook;
     get_file(26, 25, 0x17e0a4c);
-    game_animcmd_owner_name(8, 2, 0x33ad0cc);
-    sound_animcmd_owner_name(8, 2, 0x33aef8c);
-    effect_animcmd_owner_name(8, 2, 0x33ae02c);
-    status_script_owner_name(8, 2, 0x33ac1a4)
+    game_animcmd_owner_name(8, 2, 0x33ad0ec);
+    sound_animcmd_owner_name(8, 2, 0x33aefac);
+    effect_animcmd_owner_name(8, 2, 0x33ae04c);
+    status_script_owner_name(8, 2, 0x33ac1c4)
 }
 
 decl_hooks! {
     install_weapon_name_hooks => weapon_name_hook;
     get_file_weapon_name(23, 22, 0x17e098c);
-    normal_param_data(21, 27, 0x33b6a80);
-    map_collision_param_data(21, 2, 0x33b6c40);
-    visibility_param_data(21, 2, 0x33b6f64);
-    game_animcmd_weapon_name(8, 3, 0x33ad0dc);
-    sound_animcmd_weapon_name(8, 3, 0x33aef9c);
-    effect_animcmd_weapon_name(8, 3, 0x33ae03c);
-    status_script_weapon_name(8, 3, 0x33ac1b4)
+    normal_param_data(21, 27, 0x33b6aa0);
+    map_collision_param_data(21, 2, 0x33b6c60);
+    visibility_param_data(21, 2, 0x33b6f84);
+    game_animcmd_weapon_name(8, 3, 0x33ad0fc);
+    sound_animcmd_weapon_name(8, 3, 0x33aefbc);
+    effect_animcmd_weapon_name(8, 3, 0x33ae05c);
+    status_script_weapon_name(8, 3, 0x33ac1d4)
 }
 
 pub fn install() {

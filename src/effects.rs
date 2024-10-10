@@ -8,10 +8,10 @@ fn effect_manager() -> *mut u64 {
     unsafe { **(text.add(0x5334920).cast::<*mut *mut u64>()) }
 }
 
-#[skyline::from_offset(0x3563970)]
+#[skyline::from_offset(0x3563990)]
 fn unload_effects(manager: *mut u64, handle: u32);
 
-#[skyline::from_offset(0x355fb40)]
+#[skyline::from_offset(0x355fb60)]
 fn load_effects(manager: *mut u64, handle: u32, search_index: &u32) -> u32;
 
 #[skyline::hook(offset = 0x60bfd8, inline)]

@@ -1037,7 +1037,7 @@ fn create_agent_status_fighter(
     Some(unsafe { std::mem::transmute(wrapper) })
 }
 
-#[skyline::hook(offset = 0x33ac130)]
+#[skyline::hook(offset = 0x33ac150)]
 fn create_agent_status_weapon(
     object: &mut BattleObject,
     boma: &mut BattleObjectModuleAccessor,
@@ -1160,10 +1160,10 @@ pub(crate) fn agent_hash(fighter: &L2CFighterBase) -> Hash40 {
         .hash
 }
 
-#[skyline::hook(offset = 0x33b6800, inline)]
+#[skyline::hook(offset = 0x33b6820, inline)]
 unsafe fn enable_lua_module(ctx: &mut InlineCtx) {
     *ctx.registers[8].x.as_mut() =
-        skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + 0x33b9090;
+        skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + 0x33b90b0;
 }
 
 pub fn install_status_create_agent_hooks() {
@@ -1179,9 +1179,9 @@ create_agent_hook! {
     0x64c930 => (Effect, fighter);
     0x64cf50 => (Expression, fighter);
     0x64d570 => (Sound, fighter);
-    0x33ad030 => (Game, weapon);
-    0x33adf90 => (Effect, weapon);
-    0x33aeef0 => (Sound, weapon);
+    0x33ad050 => (Game, weapon);
+    0x33adfb0 => (Effect, weapon);
+    0x33aef10 => (Sound, weapon);
 }
 
 create_agent_hook! {

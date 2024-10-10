@@ -40,10 +40,10 @@ pub struct NewFighter {
 
 pub(super) static CURRENT_PLAYER_ID: AtomicUsize = AtomicUsize::new(usize::MAX);
 
-#[skyline::from_offset(0x3262110)]
+#[skyline::from_offset(0x3262130)]
 fn lookup_fighter_kind_from_ui_hash(database: u64, hash: u64) -> i32;
 
-#[skyline::hook(offset = 0x2310ce4, inline)]
+#[skyline::hook(offset = 0x2310d04, inline)]
 unsafe fn set_current_player_id(ctx: &mut InlineCtx) {
     CURRENT_PLAYER_ID.store(*ctx.registers[21].x.as_ref() as usize, Ordering::Relaxed);
 
@@ -84,7 +84,7 @@ unsafe fn lookup_fighter_kind_hash(hash: Hash40) -> i32 {
 //     CURRENT_PLAYER_ID.store(usize::MAX, Ordering::Relaxed);
 // }
 
-#[skyline::hook(offset = 0x33113e0)]
+#[skyline::hook(offset = 0x3311400)]
 unsafe fn update_selected_fighter(arg: u64, id: u32, info: *const u32) {
     CURRENT_PLAYER_ID.store(*info as usize - 1, Ordering::Relaxed);
     call_original!(arg, id, info);
@@ -185,7 +185,7 @@ decl_hooks! {
 }
 
 pub fn install() {
-    skyline::patching::Patch::in_text(0x2310ce4).nop().unwrap();
+    skyline::patching::Patch::in_text(0x2310d04).nop().unwrap();
     skyline::install_hooks!(
         set_current_player_id,
         lookup_fighter_kind_hash,

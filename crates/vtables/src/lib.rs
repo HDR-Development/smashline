@@ -37,7 +37,7 @@ pub trait VirtualClass: 'static {
                 // SAFETY: This code is intended to be run on a switch console, which will only happen
                 // with skyline present, so this is safe
                 unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) }
-                    .expose_addr()
+                    .expose_provenance()
             }
         }
     }
@@ -106,10 +106,10 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
     }
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
             != rtld::MemoryState::DereferencableOutsideModule
     } else {
-        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+        vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
 
     if needs_reloc {
@@ -219,10 +219,10 @@ pub fn vtable_read_guard<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) {
     let vtable_ptr = (vtable as *const V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
             != rtld::MemoryState::DereferencableOutsideModule
     } else {
-        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+        vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
 
     // This vtable has not been relocated yet, so this is fine
@@ -311,10 +311,10 @@ pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(
     let vtable_ptr = (vtable as *const V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
             != rtld::MemoryState::DereferencableOutsideModule
     } else {
-        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+        vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
 
     if needs_reloc {
@@ -368,10 +368,10 @@ pub fn vtable_custom_data_mut<V, T: VirtualClass + DerefMut<Target = V>>(
     let vtable_ptr = (vtable as *mut V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
             != rtld::MemoryState::DereferencableOutsideModule
     } else {
-        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+        vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
 
     if needs_reloc {
@@ -425,10 +425,10 @@ pub fn vtable_restore_vtable<'a, 'b, V, T: VirtualClass + DerefMut<Target = V>>(
     let vtable_ptr = (*vtable as *mut V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_addr() as u64)
+        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
             != rtld::MemoryState::DereferencableOutsideModule
     } else {
-        vtable_ptr.expose_addr() == T::main_address() + T::VTABLE_OFFSET
+        vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
 
     if needs_reloc {
