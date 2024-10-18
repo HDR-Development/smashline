@@ -40,6 +40,8 @@ pub fn try_get_new_agent(
 
 pub static CURRENT_OWNER_KIND: AtomicI32 = AtomicI32::new(-1);
 
+pub static IS_KIRBY_COPYING: AtomicBool = AtomicBool::new(false);
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct StaticFighterData {
@@ -102,6 +104,10 @@ impl StaticFighterData {
 #[skyline::hook(offset = 0x64b730)]
 fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     let original_data: *const StaticFighterData = call_original!(kind);
+
+    if IS_KIRBY_COPYING.load(Ordering::Relaxed) {
+        return original_data;
+    }
 
     let mut new_descriptors = vec![];
 
@@ -238,9 +244,54 @@ decl_hooks! {
     status_script_weapon_name(8, 3, 0x33ac1d4)
 }
 
+macro_rules! decl_hooks_kirby {
+    ($install_fn:ident => $func:expr; $($name:ident($str:expr, $knd:expr, $offset:expr));*) => {
+        $(
+            #[skyline::hook(offset = $offset, inline)]
+            unsafe fn $name(ctx: &mut InlineCtx) {
+                $func(ctx, $str, $knd);
+            }
+        )*
+
+        fn $install_fn() {
+            $(
+                let _ = skyline::patching::Patch::in_text($offset).nop();
+            )*
+            skyline::install_hooks!(
+                $(
+                    $name,
+                )*
+            );
+        }
+    }
+}
+
+decl_hooks_kirby! {
+    install_kirby_copy_hooks => kirby_get_copy_articles;
+    copy_setup_hook(23, 20, 0xba14f4);
+    copy_hook_1(9, 9, 0xba3e0c);
+    copy_hook_2(9, 9, 0xba400c);
+    copy_hook_3(9, 9, 0xba405c);
+    copy_hook_4(12, 20, 0xba5434)
+}
+
+unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize, kind_reg: usize) {
+    IS_KIRBY_COPYING.store(true, Ordering::Relaxed);
+    let kind = *ctx.registers[kind_reg].x.as_ref() as i32;
+    let fighter_data = get_static_fighter_data(kind);
+    IS_KIRBY_COPYING.store(false, Ordering::Relaxed);
+    let article_data = (*fighter_data).static_article_info;
+    *ctx.registers[store_reg].x.as_mut() = article_data as *const u64 as u64;
+}
+
 pub fn install() {
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
     install_weapon_owner_name_hooks();
-    skyline::install_hooks!(get_static_fighter_data);
+
+    skyline::install_hooks!(
+        get_static_fighter_data
+    );
+
+    install_kirby_copy_hooks();
 }
