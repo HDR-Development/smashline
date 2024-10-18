@@ -40,6 +40,8 @@ pub fn try_get_new_agent(
 
 pub static CURRENT_OWNER_KIND: AtomicI32 = AtomicI32::new(-1);
 
+pub static IS_KIRBY_COPYING: AtomicBool = AtomicBool::new(false);
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct StaticFighterData {
@@ -102,6 +104,10 @@ impl StaticFighterData {
 #[skyline::hook(offset = 0x64b730)]
 fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     let original_data: *const StaticFighterData = call_original!(kind);
+
+    if IS_KIRBY_COPYING.load(Ordering::Relaxed) {
+        return original_data;
+    }
 
     let mut new_descriptors = vec![];
 
@@ -270,8 +276,10 @@ decl_hooks_kirby! {
 }
 
 unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize, kind_reg: usize) {
+    IS_KIRBY_COPYING.store(true, Ordering::Relaxed);
     let kind = *ctx.registers[kind_reg].x.as_ref() as i32;
     let fighter_data = get_static_fighter_data(kind);
+    IS_KIRBY_COPYING.store(false, Ordering::Relaxed);
     let article_data = (*fighter_data).static_article_info;
     *ctx.registers[store_reg].x.as_mut() = article_data as *const u64 as u64;
 }
