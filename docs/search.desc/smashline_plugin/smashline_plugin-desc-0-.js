@@ -1,0 +1,1 @@
+searchState.loadedDescShard("smashline_plugin", 0, "<code>smashline</code> is an open source project aimed at making code …")
