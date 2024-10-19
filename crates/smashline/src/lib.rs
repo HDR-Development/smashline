@@ -354,6 +354,11 @@ decl_imports! {
         fighter_name: StringFFI,
         object: StringFFI
     );
+
+    fn smashline_whitelist_kirby_copy_article(
+        fighter_id: i32,
+        article_id: i32
+    );
 }
 
 pub fn original_acmd(agent: &mut L2CAgentBase, name: Hash40) -> AcmdFunction {
@@ -403,6 +408,10 @@ pub fn update_weapon_count(
 
 pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
     smashline_add_param_object(StringFFI::from_str(fighter), StringFFI::from_str(object));
+}
+
+pub fn whitelist_kirby_copy_article(fighter_id: i32, article_id: i32) {
+    smashline_whitelist_kirby_copy_article(fighter_id, article_id);
 }
 
 pub mod api {
