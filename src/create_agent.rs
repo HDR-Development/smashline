@@ -237,6 +237,26 @@ fn check_installed_script(acmd_map: &mut AcmdScriptSet, name: Hash40, category: 
     }
 }
 
+fn install_script(
+    acmd_scripts: &RwLock<BTreeMap<Hash40, AcmdScripts>>,
+    agent_hash: Hash40,
+    acmd: Acmd,
+    agent: &mut L2CAgentBase,
+    user_scripts: &mut HashMap<Hash40, UserScript>,
+) {
+    let acmd_scripts = acmd_scripts.read();
+    if let Some(scripts) = acmd_scripts.get(&agent_hash) {
+        for (hash, script) in scripts.get_scripts(acmd) {
+            agent.sv_set_function_hash(
+                unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
+                *hash,
+            );
+
+            user_scripts.insert(*hash, UserScript::Function(script.function));
+        }
+    }
+}
+
 pub static ACMD_SCRIPTS: RwLock<BTreeMap<Hash40, AcmdScripts>> = RwLock::new(BTreeMap::new());
 pub static ACMD_SCRIPTS_DEV: RwLock<BTreeMap<Hash40, AcmdScripts>> = RwLock::new(BTreeMap::new());
 pub static STATUS_SCRIPTS: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =
@@ -498,29 +518,8 @@ fn create_agent_hook(
                 );
             }
 
-            let acmd_scripts = ACMD_SCRIPTS.read();
-            if let Some(scripts) = acmd_scripts.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
-                        *hash,
-                    );
-
-                    user_scripts.insert(*hash, UserScript::Function(script.function));
-                }
-            }
-
-            let acmd_scripts_dev = ACMD_SCRIPTS_DEV.read();
-            if let Some(scripts) = acmd_scripts_dev.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
-                        *hash,
-                    );
-
-                    user_scripts.insert(*hash, UserScript::Function(script.function));
-                }
-            }
+            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts);
+            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts);
 
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
@@ -609,29 +608,8 @@ fn create_agent_hook(
                 );
             }
 
-            let acmd_scripts = ACMD_SCRIPTS.read();
-            if let Some(scripts) = acmd_scripts.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
-                        *hash,
-                    );
-
-                    user_scripts.insert(*hash, UserScript::Function(script.function));
-                }
-            }
-
-            let acmd_scripts_dev = ACMD_SCRIPTS_DEV.read();
-            if let Some(scripts) = acmd_scripts_dev.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
-                        *hash,
-                    );
-
-                    user_scripts.insert(*hash, UserScript::Function(script.function));
-                }
-            }
+            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts);
+            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts);
 
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
