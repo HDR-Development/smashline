@@ -32,7 +32,7 @@ fn mark_costume(
 
         for c in &mut *costumes {
             if costume == *c {
-                continue;
+                return;
             }
 
             if costume.min <= c.max && costume.max >= c.min {
