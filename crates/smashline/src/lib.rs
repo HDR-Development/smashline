@@ -48,6 +48,13 @@ impl std::fmt::Display for Priority {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
+pub struct Costume {
+    pub min: i32,
+    pub max: i32,
+}
+
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub enum Acmd {
     Game,
@@ -299,12 +306,29 @@ decl_imports! {
 
     fn smashline_get_action_registry() -> &'static acmd_engine::action::ActionRegistry;
 
+    fn smashline_install_acmd_script_costume(
+        agent: Hash40,
+        costume: Costume,
+        script: Hash40,
+        category: Acmd,
+        priority: Priority,
+        function: unsafe extern "C" fn(&mut L2CAgentBase)
+    );
+
     fn smashline_install_acmd_script(
         agent: Hash40,
         script: Hash40,
         category: Acmd,
         priority: Priority,
         function: unsafe extern "C" fn(&mut L2CAgentBase)
+    );
+
+    fn smashline_install_status_script_costume(
+        agent: Option<NonZeroU64>,
+        costume: Costume,
+        status: i32,
+        line: StatusLine,
+        function: *const ()
     );
 
     fn smashline_install_status_script(
@@ -443,6 +467,17 @@ pub mod api {
         smashline_get_action_registry().register::<A>();
     }
 
+    pub fn install_status_script_costume(
+        agent: Option<Hash40>,
+        costume: Costume,
+        line: StatusLine,
+        kind: i32,
+        function: *const (),
+    ) {
+        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
+        smashline_install_status_script_costume(agent, costume, kind, line, function);
+    }
+
     pub fn install_status_script(
         agent: Option<Hash40>,
         line: StatusLine,
@@ -456,6 +491,17 @@ pub mod api {
     pub fn install_line_callback(agent: Option<Hash40>, line: StatusLine, function: *const ()) {
         let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
         smashline_install_line_callback(agent, line, function);
+    }
+
+    pub fn install_acmd_script_costume(
+        agent: Hash40,
+        costume: Costume,
+        script: Hash40,
+        category: Acmd,
+        priority: Priority,
+        function: unsafe extern "C" fn(&mut L2CAgentBase),
+    ) {
+        smashline_install_acmd_script_costume(agent, costume, script, category, priority, function);
     }
 
     pub fn install_acmd_script(

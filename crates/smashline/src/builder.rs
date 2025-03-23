@@ -1,4 +1,4 @@
-use crate::{AsHash40, ObjectEvent, Priority, StatusLine};
+use crate::{AsHash40, Costume, ObjectEvent, Priority, StatusLine};
 
 pub type AcmdFunction = unsafe extern "C" fn(&mut crate::L2CAgentBase);
 
@@ -92,6 +92,7 @@ struct StatusScript {
 
 pub struct Agent {
     kind_hash: crate::Hash40,
+    costume: Costume,
     acmd: Vec<AcmdScript>,
     lines: Vec<LineCallback>,
     status: Vec<StatusScript>,
@@ -102,11 +103,18 @@ impl Agent {
     pub fn new(agent: impl AsHash40) -> Self {
         Self {
             kind_hash: agent.as_hash40(),
+            costume: Costume { min: -1, max: -1 },
             acmd: vec![],
             lines: vec![],
             status: vec![],
             events: vec![],
         }
+    }
+
+    pub fn set_costume(&mut self, costume: (i32, i32)) -> &mut Self {
+        self.costume.min = costume.0;
+        self.costume.max = costume.1;
+        self
     }
 
     pub fn acmd(&mut self, name: &str, function: AcmdFunction, priority: Priority) -> &mut Self {
@@ -247,8 +255,9 @@ impl Agent {
 
     pub fn install(&self) {
         for acmd in self.acmd.iter() {
-            crate::api::install_acmd_script(
+            crate::api::install_acmd_script_costume(
                 self.kind_hash,
+                self.costume,
                 acmd.replaces,
                 acmd.category,
                 acmd.priority,
@@ -257,8 +266,9 @@ impl Agent {
         }
 
         for status in self.status.iter() {
-            crate::api::install_status_script(
+            crate::api::install_status_script_costume(
                 Some(self.kind_hash),
+                self.costume,
                 status.line,
                 status.kind,
                 status.function,

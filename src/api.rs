@@ -6,7 +6,7 @@ use std::{
 use acmd_engine::action::ActionRegistry;
 use rtld::Section;
 use smashline::{
-    Acmd, AcmdFunction, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
+    Acmd, AcmdFunction, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
 };
 
 use crate::{
@@ -18,6 +18,50 @@ use crate::{
     },
     state_callback::{StateCallback, StateCallbackFunction},
 };
+
+fn mark_costume(
+    agent: Hash40,
+    costume: Costume
+) {
+    const NO_COSTUME: Costume = Costume { min: -1, max: -1 };
+    if costume != NO_COSTUME {
+        let mut costumes = crate::create_agent::COSTUMES.write();
+        let costumes = costumes
+            .entry(agent)
+            .or_default();
+
+        for c in &mut *costumes {
+            if costume.min < c.max && costume.max > c.min {
+                let name = {
+                    let mut ret = agent.to_label();
+
+                    for n in LOWERCASE_FIGHTER_NAMES .iter() {
+                        if Hash40::new(n) == agent {
+                            ret = n.to_string();
+                        }
+                    }
+
+                    ret
+                };
+
+                // It is possible for 2 fighters of the same kind and similar/overlapping costumes
+                // to work using some sort of identifer on top of the costume, such as a unique
+                // name: ["Goku", (80, 87)].
+                //
+                // However, it's probably not necessary since there will be ROMFS conflicts anyway
+                // if there are similar/overlapping costumes for that fighter.
+                panic!(
+                    "Conflicting costumes: '{}' has ({}, {}) for their costume, which overlaps with yours ({}, {})",
+                    name,
+                    c.min, c.max,
+                    costume.min, costume.max
+                );
+            }
+        }
+
+        costumes.push(costume);
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn smashline_remove_by_plugin_range(start: usize, end: usize) {
@@ -50,6 +94,32 @@ pub extern "C" fn smashline_remove_by_plugin_range(start: usize, end: usize) {
 }
 
 #[no_mangle]
+pub extern "C" fn smashline_install_acmd_script_costume(
+    agent: Hash40,
+    costume: Costume,
+    script: Hash40,
+    category: Acmd,
+    priority: Priority,
+    function: unsafe extern "C" fn(&mut L2CAgentBase),
+) {
+    mark_costume(agent, costume);
+
+    if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
+        crate::create_agent::ACMD_SCRIPTS_DEV
+            .write()
+            .entry(agent)
+            .or_default()
+            .set_script(script, category, AcmdScript { function, priority, costume });
+        return;
+    }
+    crate::create_agent::ACMD_SCRIPTS
+        .write()
+        .entry(agent)
+        .or_default()
+        .set_script(script, category, AcmdScript { function, priority, costume });
+}
+
+#[no_mangle]
 pub extern "C" fn smashline_install_acmd_script(
     agent: Hash40,
     script: Hash40,
@@ -57,24 +127,13 @@ pub extern "C" fn smashline_install_acmd_script(
     priority: Priority,
     function: unsafe extern "C" fn(&mut L2CAgentBase),
 ) {
-    if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
-        crate::create_agent::ACMD_SCRIPTS_DEV
-            .write()
-            .entry(agent)
-            .or_default()
-            .set_script(script, category, AcmdScript { function, priority });
-        return;
-    }
-    crate::create_agent::ACMD_SCRIPTS
-        .write()
-        .entry(agent)
-        .or_default()
-        .set_script(script, category, AcmdScript { function, priority });
+    smashline_install_acmd_script_costume(agent, Costume { min: -1, max: -1 }, script, category, priority, function);
 }
 
 #[no_mangle]
-pub extern "C" fn smashline_install_status_script(
+pub extern "C" fn smashline_install_status_script_costume(
     agent: Option<NonZeroU64>,
+    costume: Costume,
     status: i32,
     line: StatusLine,
     function: *const (),
@@ -82,6 +141,8 @@ pub extern "C" fn smashline_install_status_script(
     let agent = agent
         .map(|x| Hash40(x.get()))
         .unwrap_or(Hash40::new("common"));
+
+    mark_costume(agent, costume);
 
     if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
         crate::create_agent::STATUS_SCRIPTS_DEV
@@ -91,6 +152,7 @@ pub extern "C" fn smashline_install_status_script(
             .push(StatusScript {
                 id: status,
                 function: StatusScriptFunction::from_line(line, function),
+                costume
             });
         return;
     }
@@ -101,12 +163,24 @@ pub extern "C" fn smashline_install_status_script(
         .push(StatusScript {
             id: status,
             function: StatusScriptFunction::from_line(line, function),
+            costume
         });
 }
 
 #[no_mangle]
-pub extern "C" fn smashline_install_line_callback(
+pub extern "C" fn smashline_install_status_script(
     agent: Option<NonZeroU64>,
+    status: i32,
+    line: StatusLine,
+    function: *const (),
+) {
+    smashline_install_status_script_costume(agent, Costume { min: -1, max: -1 }, status, line, function);
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_install_line_callback_costume(
+    agent: Option<NonZeroU64>,
+    costume: Costume,
     line: StatusLine,
     function: *const (),
 ) {
@@ -115,7 +189,17 @@ pub extern "C" fn smashline_install_line_callback(
     crate::callbacks::CALLBACKS.write().push(StatusCallback {
         hash: agent,
         function: StatusCallbackFunction::new(line, function),
+        costume,
     });
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_install_line_callback(
+    agent: Option<NonZeroU64>,
+    line: StatusLine,
+    function: *const (),
+) {
+    smashline_install_line_callback_costume(agent, Costume { min: -1, max: -1 }, line, function);
 }
 
 #[no_mangle]

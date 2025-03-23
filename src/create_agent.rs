@@ -17,13 +17,13 @@ use smash::{
     lua_State,
 };
 use smashline::{
-    locks::RwLock, Acmd, AcmdFunction, AsHash40, BattleObjectCategory, Hash40, L2CAgentBase,
+    locks::RwLock, Acmd, AcmdFunction, AsHash40, BattleObjectCategory, Costume, Hash40, L2CAgentBase,
     L2CFighterBase, L2CValue, Priority, StatusLine, Variadic,
 };
 use vtables::{CustomDataAccessError, VirtualClass};
 
 use crate::{
-    cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
+    cloning::fighters::CURRENT_PLAYER_ID, cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
     static_accessor::StaticArrayAccessor, callbacks::{CALLBACKS, StatusCallbackFunction}
 };
 
@@ -166,12 +166,14 @@ impl StatusScriptFunction {
 pub struct StatusScript {
     pub id: i32,
     pub function: StatusScriptFunction,
+    pub costume: Costume
 }
 
 #[derive(Copy, Clone)]
 pub struct AcmdScript {
     pub function: unsafe extern "C" fn(&mut L2CAgentBase),
     pub priority: Priority,
+    pub costume: Costume
 }
 
 type AcmdScriptSet = HashMap<Hash40, AcmdScript>;
@@ -243,10 +245,45 @@ fn install_script(
     acmd: Acmd,
     agent: &mut L2CAgentBase,
     user_scripts: &mut HashMap<Hash40, UserScript>,
+    is_weapon: bool,
 ) {
+    let costume = unsafe {
+        let entry_id = if is_weapon {
+            CURRENT_PLAYER_ID.load(Ordering::Relaxed) as i32
+        } else {
+            let battle_object = agent.battle_object as *const BattleObject;
+            let battle_object = &*battle_object;
+            battle_object.entry_id
+        };
+
+        crate::utils::get_costume(entry_id)
+    };
+
+    let mut has_costume = false;
+
+    let costumes = COSTUMES.read();
+    if let Some(costume_vec) = costumes.get(&agent_hash) {
+        for c in costume_vec {
+            if (c.min..=c.max).contains(&costume) {
+                has_costume = true;
+            }
+        }
+    }
+
     let acmd_scripts = acmd_scripts.read();
     if let Some(scripts) = acmd_scripts.get(&agent_hash) {
         for (hash, script) in scripts.get_scripts(acmd) {
+            let c = script.costume;
+            const NO_COSTUME: Costume = Costume { min: -1, max: -1 };
+
+            if has_costume && !(c.min..=c.max).contains(&costume) {
+                continue;
+            }
+
+            if !has_costume && c != NO_COSTUME {
+                continue;
+            }
+
             agent.sv_set_function_hash(
                 unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
                 *hash,
@@ -263,6 +300,8 @@ pub static STATUS_SCRIPTS: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =
     RwLock::new(BTreeMap::new());
 pub static STATUS_SCRIPTS_DEV: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =
     RwLock::new(BTreeMap::new());
+
+pub static COSTUMES: RwLock<BTreeMap<Hash40, Vec<Costume>>> = RwLock::new(BTreeMap::new());
 
 pub const LOWERCASE_FIGHTER_NAMES: StaticArrayAccessor<&'static str> =
     StaticArrayAccessor::new(0x4f81e20, 118);
@@ -518,8 +557,8 @@ fn create_agent_hook(
                 );
             }
 
-            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts);
-            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts);
+            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts, false);
+            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts, false);
 
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
@@ -608,8 +647,8 @@ fn create_agent_hook(
                 );
             }
 
-            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts);
-            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts);
+            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts, true);
+            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts, true);
 
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);

@@ -38,7 +38,7 @@ pub struct NewFighter {
     pub hash: Hash40,
 }
 
-pub(super) static CURRENT_PLAYER_ID: AtomicUsize = AtomicUsize::new(usize::MAX);
+pub static CURRENT_PLAYER_ID: AtomicUsize = AtomicUsize::new(usize::MAX);
 
 #[skyline::from_offset(0x3262130)]
 fn lookup_fighter_kind_from_ui_hash(database: u64, hash: u64) -> i32;

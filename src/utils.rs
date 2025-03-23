@@ -32,6 +32,20 @@ pub fn get_weapon_code_dependency(id: i32) -> Option<i32> {
     try_get_new_agent(&agents, id, current_owner).and_then(|x| x.use_original_code.then_some(x.old_owner_id))
 }
 
+pub fn get_costume(entry_id: i32) -> i32 {
+    unsafe {
+        const VEC_OFFSET: u64 = 0x5324680;
+        let some_vec = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + VEC_OFFSET;
+        let some_vec = *(some_vec as *const u64);
+
+        let index = entry_id as u64 * 8;
+        let some_struct = *((some_vec + index + 0xe8) as *const u64);
+
+        const COSTUME_OFFSET: u64 = 100;
+        *((some_struct + COSTUME_OFFSET) as *const u64) as i32
+    }
+}
+
 fn dynamic_module_manager() -> *mut u64 {
     let text = unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as *mut u8 };
     unsafe { **text.add(0x5327cd0).cast::<*mut *mut u64>() }
