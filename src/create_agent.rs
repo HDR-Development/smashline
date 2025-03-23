@@ -259,16 +259,10 @@ fn install_script(
         crate::utils::get_costume(entry_id)
     };
 
-    let mut has_costume = false;
-
     let costumes = COSTUMES.read();
-    if let Some(costume_vec) = costumes.get(&agent_hash) {
-        for c in costume_vec {
-            if (c.min..=c.max).contains(&costume) {
-                has_costume = true;
-            }
-        }
-    }
+    let has_costume = costumes.get(&agent_hash).map_or(false, |costume_vec| {
+        costume_vec.iter().any(|c| (c.min..=c.max).contains(&costume))
+    });
 
     let acmd_scripts = acmd_scripts.read();
     if let Some(scripts) = acmd_scripts.get(&agent_hash) {
@@ -754,11 +748,42 @@ fn install_status_scripts(
     list: &[StatusScript],
     agent: &mut L2CFighterWrapper,
 ) -> i32 {
+    let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref()).unwrap();
+    let is_weapon = data.is_weapon;
+
+    let costume = unsafe {
+        let entry_id = if is_weapon {
+            CURRENT_PLAYER_ID.load(Ordering::Relaxed) as i32
+        } else {
+            let battle_object = agent.0.battle_object as *const BattleObject;
+            let battle_object = &*battle_object;
+            battle_object.entry_id
+        };
+
+        crate::utils::get_costume(entry_id)
+    };
+
+    let costumes = COSTUMES.read();
+    let has_costume = costumes.get(&data.hash).map_or(false, |costume_vec| {
+        costume_vec.iter().any(|c| (c.min..=c.max).contains(&costume))
+    });
+
     let mut max_new = old_total;
+
     for status in list.iter() {
+        let c = status.costume;
+        const NO_COSTUME: Costume = Costume { min: -1, max: -1 };
+
+        if has_costume && !(c.min..=c.max).contains(&costume) {
+            continue;
+        }
+
+        if !has_costume && c != NO_COSTUME {
+            continue;
+        }
+
         max_new = max_new.max(status.id + 1);
-    }
-    for status in list.iter() {
+
         use StatusScriptFunction::*;
 
         macro_rules! set {
@@ -892,27 +917,19 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
 
     let mut new_total = old_total;
 
-    if is_weapon {
-        if let Some(common) = statuses.get(&Hash40::new("weapon")) {
-            new_total = new_total.max(install_status_scripts(old_total, common, agent));
-        }
-        if let Some(common) = statuses_dev.get(&Hash40::new("weapon")) {
-            new_total = new_total.max(install_status_scripts(old_total, common, agent));
-        }
+    let hashes: &[Hash40] = if is_weapon {
+        &[Hash40::new("weapon"), hash]
     } else {
-        if let Some(common) = statuses.get(&Hash40::new("fighter")) {
-            new_total = new_total.max(install_status_scripts(old_total, common, agent));
-        }
-        if let Some(common) = statuses_dev.get(&Hash40::new("fighter")) {
-            new_total = new_total.max(install_status_scripts(old_total, common, agent));
-        }
-    }
+        &[Hash40::new("fighter"), hash]
+    };
 
-    if let Some(common) = statuses.get(&hash) {
-        new_total = new_total.max(install_status_scripts(old_total, common, agent));
-    }
-    if let Some(common) = statuses_dev.get(&hash) {
-        new_total = new_total.max(install_status_scripts(old_total, common, agent));
+    for h in hashes {
+        if let Some(common) = statuses.get(h) {
+            new_total = new_total.max(install_status_scripts(old_total, common, agent));
+        }
+        if let Some(common) = statuses_dev.get(h) {
+            new_total = new_total.max(install_status_scripts(old_total, common, agent));
+        }
     }
 
     agent.0.global_table.try_table_mut().unwrap()[0xC] = smash::lib::L2CValue::new(new_total);
