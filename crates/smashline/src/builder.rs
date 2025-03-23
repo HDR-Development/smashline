@@ -276,7 +276,12 @@ impl Agent {
         }
 
         for line in self.lines.iter() {
-            crate::api::install_line_callback(Some(self.kind_hash), line.line, line.function);
+            crate::api::install_line_callback_costume(
+                Some(self.kind_hash),
+                self.costume,
+                line.line,
+                line.function
+            );
         }
 
         for event in self.events.iter() {

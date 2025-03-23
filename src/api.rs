@@ -185,6 +185,11 @@ pub extern "C" fn smashline_install_line_callback_costume(
 ) {
     let agent = agent.map(|value| Hash40(value.get()));
 
+    if agent != Some(Hash40::new("fighter"))
+    && agent != Some(Hash40::new("weapon")) {
+        mark_costume(agent.unwrap(), costume);
+    }
+
     crate::callbacks::CALLBACKS.write().push(StatusCallback {
         hash: agent,
         function: StatusCallbackFunction::new(line, function),

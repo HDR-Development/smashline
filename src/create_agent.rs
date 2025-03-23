@@ -23,7 +23,7 @@ use smashline::{
 use vtables::{CustomDataAccessError, VirtualClass};
 
 use crate::{
-    cloning::fighters::CURRENT_PLAYER_ID, cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
+    cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
     static_accessor::StaticArrayAccessor, callbacks::{CALLBACKS, StatusCallbackFunction}
 };
 
@@ -247,22 +247,8 @@ fn install_script(
     user_scripts: &mut HashMap<Hash40, UserScript>,
     is_weapon: bool,
 ) {
-    let costume = unsafe {
-        let entry_id = if is_weapon {
-            CURRENT_PLAYER_ID.load(Ordering::Relaxed) as i32
-        } else {
-            let battle_object = agent.battle_object as *const BattleObject;
-            let battle_object = &*battle_object;
-            battle_object.entry_id
-        };
-
-        crate::utils::get_costume(entry_id)
-    };
-
-    let costumes = COSTUMES.read();
-    let has_costume = costumes.get(&agent_hash).map_or(false, |costume_vec| {
-        costume_vec.iter().any(|c| (c.min..=c.max).contains(&costume))
-    });
+    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon);
+    let has_costume = crate::utils::has_costume(agent_hash, costume);
 
     let acmd_scripts = acmd_scripts.read();
     if let Some(scripts) = acmd_scripts.get(&agent_hash) {
@@ -751,22 +737,8 @@ fn install_status_scripts(
     let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref()).unwrap();
     let is_weapon = data.is_weapon;
 
-    let costume = unsafe {
-        let entry_id = if is_weapon {
-            CURRENT_PLAYER_ID.load(Ordering::Relaxed) as i32
-        } else {
-            let battle_object = agent.0.battle_object as *const BattleObject;
-            let battle_object = &*battle_object;
-            battle_object.entry_id
-        };
-
-        crate::utils::get_costume(entry_id)
-    };
-
-    let costumes = COSTUMES.read();
-    let has_costume = costumes.get(&data.hash).map_or(false, |costume_vec| {
-        costume_vec.iter().any(|c| (c.min..=c.max).contains(&costume))
-    });
+    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon);
+    let has_costume = crate::utils::has_costume(data.hash, costume);
 
     let mut max_new = old_total;
 
@@ -890,11 +862,25 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
         }
     }
 
+    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon);
+    let has_costume = crate::utils::has_costume(hash, costume);
+
     let callbacks = CALLBACKS.read();
     let mut status_callbacks = Vec::new();
 
     for callback in callbacks.iter() {
         if callback.hash == Some(hash) {
+            let c = callback.costume;
+            const NO_COSTUME: Costume = Costume { min: -1, max: -1 };
+
+            if has_costume && !(c.min..=c.max).contains(&costume) {
+                continue;
+            }
+
+            if !has_costume && c != NO_COSTUME {
+                continue;
+            }
+
             status_callbacks.push(callback.function);
         }
         else if is_weapon {

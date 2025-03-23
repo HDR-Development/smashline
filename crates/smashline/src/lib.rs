@@ -338,6 +338,13 @@ decl_imports! {
         function: *const ()
     );
 
+    fn smashline_install_line_callback_costume(
+        agent: Option<NonZeroU64>,
+        costume: Costume,
+        line: StatusLine,
+        callback: *const ()
+    );
+
     fn smashline_install_line_callback(
         agent: Option<NonZeroU64>,
         line: StatusLine,
@@ -488,7 +495,21 @@ pub mod api {
         smashline_install_status_script(agent, kind, line, function);
     }
 
-    pub fn install_line_callback(agent: Option<Hash40>, line: StatusLine, function: *const ()) {
+    pub fn install_line_callback_costume(
+        agent: Option<Hash40>,
+        costume: Costume,
+        line: StatusLine,
+        function: *const (),
+    ) {
+        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
+        smashline_install_line_callback_costume(agent, costume, line, function);
+    }
+
+    pub fn install_line_callback(
+        agent: Option<Hash40>,
+        line: StatusLine,
+        function: *const (),
+    ) {
         let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
         smashline_install_line_callback(agent, line, function);
     }
