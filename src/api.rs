@@ -31,18 +31,17 @@ fn mark_costume(
             .or_default();
 
         for c in &mut *costumes {
-            if costume.min < c.max && costume.max > c.min {
-                let name = {
-                    let mut ret = agent.to_label();
+            if costume == *c {
+                continue;
+            }
 
-                    for n in LOWERCASE_FIGHTER_NAMES .iter() {
-                        if Hash40::new(n) == agent {
-                            ret = n.to_string();
-                        }
-                    }
-
-                    ret
-                };
+            if costume.min <= c.max && costume.max >= c.min {
+                let name = LOWERCASE_FIGHTER_NAMES
+                    .iter()
+                    .chain(LOWERCASE_WEAPON_NAMES.iter())
+                    .find(|&n| Hash40::new(n) == agent)
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|| agent.to_label());
 
                 // It is possible for 2 fighters of the same kind and similar/overlapping costumes
                 // to work using some sort of identifer on top of the costume, such as a unique
