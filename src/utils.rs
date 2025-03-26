@@ -67,8 +67,10 @@ pub fn has_costume(hash: Hash40, costume: i32) -> bool {
     COSTUMES
         .read()
         .get(&hash).map_or(false, |costume_vec| {
-        costume_vec.iter().any(|c| (c.min..=c.max).contains(&costume))
-    })
+            costume_vec.iter().any(|c| {
+                c.as_slice().contains(&(costume as usize))
+            })
+        })
 }
 
 fn dynamic_module_manager() -> *mut u64 {

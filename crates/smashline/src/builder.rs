@@ -103,7 +103,7 @@ impl Agent {
     pub fn new(agent: impl AsHash40) -> Self {
         Self {
             kind_hash: agent.as_hash40(),
-            costume: Costume { min: -1, max: -1 },
+            costume: Costume { data: std::ptr::null(), len: 0 },
             acmd: vec![],
             lines: vec![],
             status: vec![],
@@ -111,9 +111,8 @@ impl Agent {
         }
     }
 
-    pub fn set_costume(&mut self, costume: (i32, i32)) -> &mut Self {
-        self.costume.min = costume.0;
-        self.costume.max = costume.1;
+    pub fn set_costume(&mut self, costumes: Vec<usize>) -> &mut Self {
+        self.costume = Costume::from_vec(costumes);
         self
     }
 

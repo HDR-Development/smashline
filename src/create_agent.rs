@@ -166,14 +166,14 @@ impl StatusScriptFunction {
 pub struct StatusScript {
     pub id: i32,
     pub function: StatusScriptFunction,
-    pub costume: Costume
+    pub costume: Costume,
 }
 
 #[derive(Copy, Clone)]
 pub struct AcmdScript {
     pub function: unsafe extern "C" fn(&mut L2CAgentBase),
     pub priority: Priority,
-    pub costume: Costume
+    pub costume: Costume,
 }
 
 type AcmdScriptSet = HashMap<Hash40, AcmdScript>;
@@ -254,13 +254,12 @@ fn install_script(
     if let Some(scripts) = acmd_scripts.get(&agent_hash) {
         for (hash, script) in scripts.get_scripts(acmd) {
             let c = script.costume;
-            const NO_COSTUME: Costume = Costume { min: -1, max: -1 };
 
-            if has_costume && !(c.min..=c.max).contains(&costume) {
+            if has_costume && !c.as_slice().contains(&(costume as usize)) {
                 continue;
             }
 
-            if !has_costume && c != NO_COSTUME {
+            if !has_costume && !c.data.is_null() {
                 continue;
             }
 
@@ -744,13 +743,12 @@ fn install_status_scripts(
 
     for status in list.iter() {
         let c = status.costume;
-        const NO_COSTUME: Costume = Costume { min: -1, max: -1 };
 
-        if has_costume && !(c.min..=c.max).contains(&costume) {
+        if has_costume && !c.as_slice().contains(&(costume as usize)) {
             continue;
         }
 
-        if !has_costume && c != NO_COSTUME {
+        if !has_costume && !c.data.is_null() {
             continue;
         }
 
@@ -871,13 +869,12 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
     for callback in callbacks.iter() {
         if callback.hash == Some(hash) {
             let c = callback.costume;
-            const NO_COSTUME: Costume = Costume { min: -1, max: -1 };
 
-            if has_costume && !(c.min..=c.max).contains(&costume) {
+            if has_costume && !c.as_slice().contains(&(costume as usize)) {
                 continue;
             }
 
-            if !has_costume && c != NO_COSTUME {
+            if !has_costume && !c.data.is_null() {
                 continue;
             }
 

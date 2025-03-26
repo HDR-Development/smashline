@@ -21,45 +21,34 @@ use crate::{
 
 fn mark_costume(
     agent: Hash40,
-    costume: Costume
+    costume: Costume,
 ) {
-    const NO_COSTUME: Costume = Costume { min: -1, max: -1 };
-    if costume != NO_COSTUME {
-        let mut costumes = crate::create_agent::COSTUMES.write();
-        let costumes = costumes
-            .entry(agent)
-            .or_default();
+    let costume_slice = costume.as_slice();
 
-        for c in &mut *costumes {
-            if costume == *c {
-                return;
-            }
+    if costume_slice.is_empty() {
+        return;
+    }
 
-            if costume.min <= c.max && costume.max >= c.min {
-                let name = LOWERCASE_FIGHTER_NAMES
-                    .iter()
-                    .chain(LOWERCASE_WEAPON_NAMES.iter())
-                    .find(|&n| Hash40::new(n) == agent)
-                    .map(|n| n.to_string())
-                    .unwrap_or_else(|| agent.to_label());
+    let mut costumes = crate::create_agent::COSTUMES.write();
+    let costumes = costumes
+        .entry(agent)
+        .or_default();
 
-                // It is possible for 2 fighters of the same kind and similar/overlapping costumes
-                // to work using some sort of identifer on top of the costume, such as a unique
-                // name: ["Goku", (80, 87)].
-                //
-                // However, it's probably not necessary since there will be ROMFS conflicts anyway
-                // if there are similar/overlapping costumes for that fighter.
-                panic!(
-                    "Conflicting costumes: '{}' has ({}, {}) for their costume, which overlaps with yours ({}, {})",
-                    name,
-                    c.min, c.max,
-                    costume.min, costume.max
-                );
-            }
+    for c in &mut *costumes {
+        if costume_slice == c.as_slice() {
+            return;
         }
 
-        costumes.push(costume);
+        let exists = costume_slice.iter().any(|e| {
+            c.as_slice().contains(e)
+        });
+
+        if exists {
+            // TODO: Do something if a costume has already been marked for this agent
+        }
     }
+
+    costumes.push(costume);
 }
 
 #[no_mangle]
@@ -126,7 +115,7 @@ pub extern "C" fn smashline_install_acmd_script(
     priority: Priority,
     function: unsafe extern "C" fn(&mut L2CAgentBase),
 ) {
-    smashline_install_acmd_script_costume(agent, Costume { min: -1, max: -1 }, script, category, priority, function);
+    smashline_install_acmd_script_costume(agent, Costume { data: std::ptr::null(), len: 0 }, script, category, priority, function);
 }
 
 #[no_mangle]
@@ -173,7 +162,7 @@ pub extern "C" fn smashline_install_status_script(
     line: StatusLine,
     function: *const (),
 ) {
-    smashline_install_status_script_costume(agent, Costume { min: -1, max: -1 }, status, line, function);
+    smashline_install_status_script_costume(agent, Costume { data: std::ptr::null(), len: 0 }, status, line, function);
 }
 
 #[no_mangle]
@@ -203,7 +192,7 @@ pub extern "C" fn smashline_install_line_callback(
     line: StatusLine,
     function: *const (),
 ) {
-    smashline_install_line_callback_costume(agent, Costume { min: -1, max: -1 }, line, function);
+    smashline_install_line_callback_costume(agent, Costume { data: std::ptr::null(), len: 0 }, line, function);
 }
 
 #[no_mangle]

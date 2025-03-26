@@ -50,8 +50,27 @@ impl std::fmt::Display for Priority {
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub struct Costume {
-    pub min: i32,
-    pub max: i32,
+    pub data: *const usize,
+    pub len: usize,
+}
+
+impl Costume {
+    pub fn from_vec(vec: Vec<usize>) -> Self {
+        let len = vec.len();
+        let data = vec.as_ptr();
+        std::mem::forget(vec);
+        Costume { data, len }
+    }
+
+    pub fn as_slice(self) -> &'static [usize] {
+        unsafe {
+            if self.data.is_null() || self.len == 0 {
+                return &[];
+            }
+
+            std::slice::from_raw_parts(self.data, self.len)
+        }
+    }
 }
 
 #[repr(C)]
