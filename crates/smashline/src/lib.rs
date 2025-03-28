@@ -47,11 +47,27 @@ impl std::fmt::Display for Priority {
     }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct AgentEntry {
+    pub hash: u64,
+    pub costume_data: *const usize
+}
+impl AgentEntry {
+    pub fn new(hash: u64, costume_data: *const usize) -> Self {
+        Self { hash, costume_data }
+    }
+}
+
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct Costume {
     pub data: *const usize,
     pub len: usize,
+}
+impl Default for Costume {
+    fn default() -> Self {
+        Costume { data: std::ptr::null(), len: 0 }
+    }
 }
 
 impl Costume {

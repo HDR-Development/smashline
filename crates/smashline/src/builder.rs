@@ -103,7 +103,7 @@ impl Agent {
     pub fn new(agent: impl AsHash40) -> Self {
         Self {
             kind_hash: agent.as_hash40(),
-            costume: Costume { data: std::ptr::null(), len: 0 },
+            costume: Costume::default(),
             acmd: vec![],
             lines: vec![],
             status: vec![],

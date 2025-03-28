@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 
 use smash::app::BattleObject;
-use smashline::Hash40;
+use smashline::{Costume, Hash40};
 
 use crate::{
     cloning::fighters::CURRENT_PLAYER_ID,
@@ -70,6 +70,17 @@ pub fn has_costume(hash: Hash40, costume: i32) -> bool {
             costume_vec.iter().any(|c| {
                 c.as_slice().contains(&(costume as usize))
             })
+        })
+}
+
+pub fn get_costume_data(hash: Hash40, costume: i32) -> Costume {
+    let def = Costume::default();
+    COSTUMES
+        .read()
+        .get(&hash).map_or(def, |costume_vec| {
+            costume_vec.iter().find(|c| {
+                c.as_slice().contains(&(costume as usize))
+            }).copied().unwrap_or(def)
         })
 }
 

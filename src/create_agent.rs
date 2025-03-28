@@ -17,7 +17,7 @@ use smash::{
     lua_State,
 };
 use smashline::{
-    locks::RwLock, Acmd, AcmdFunction, AsHash40, BattleObjectCategory, Costume, Hash40, L2CAgentBase,
+    locks::RwLock, Acmd, AcmdFunction, AgentEntry, AsHash40, BattleObjectCategory, Costume, Hash40, L2CAgentBase,
     L2CFighterBase, L2CValue, Priority, StatusLine, Variadic,
 };
 use vtables::{CustomDataAccessError, VirtualClass};
@@ -230,7 +230,11 @@ fn check_installed_script(acmd_map: &mut AcmdScriptSet, name: Hash40, category: 
             acmd_map.insert(name, script)
         }
         else {
-            println!("[smashline] Script {:#x} of {} already replaced with {}", name.0, category, script.priority);
+            if script_old.priority == script.priority {
+                println!("[smashline] Script {:#x} of {} already exists with {}! Check for duplicates!", name.0, category, script_old.priority);
+            } else {
+                println!("[smashline] Script {:#x} of {} with {} will be bypassed. Already installed with {}.", name.0, category, script.priority, script_old.priority);
+            }
             None
         }
     }
@@ -240,7 +244,7 @@ fn check_installed_script(acmd_map: &mut AcmdScriptSet, name: Hash40, category: 
 }
 
 fn install_script(
-    acmd_scripts: &RwLock<BTreeMap<Hash40, AcmdScripts>>,
+    acmd_scripts: &RwLock<BTreeMap<AgentEntry, AcmdScripts>>,
     agent_hash: Hash40,
     acmd: Acmd,
     agent: &mut L2CAgentBase,
@@ -249,9 +253,13 @@ fn install_script(
 ) {
     let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon);
     let has_costume = crate::utils::has_costume(agent_hash, costume);
+    let entry = AgentEntry::new(
+        agent_hash.0, 
+        crate::utils::get_costume_data(agent_hash, costume).data
+    );
 
     let acmd_scripts = acmd_scripts.read();
-    if let Some(scripts) = acmd_scripts.get(&agent_hash) {
+    if let Some(scripts) = acmd_scripts.get(&entry) {
         for (hash, script) in scripts.get_scripts(acmd) {
             let c = script.costume;
 
@@ -273,8 +281,8 @@ fn install_script(
     }
 }
 
-pub static ACMD_SCRIPTS: RwLock<BTreeMap<Hash40, AcmdScripts>> = RwLock::new(BTreeMap::new());
-pub static ACMD_SCRIPTS_DEV: RwLock<BTreeMap<Hash40, AcmdScripts>> = RwLock::new(BTreeMap::new());
+pub static ACMD_SCRIPTS: RwLock<BTreeMap<AgentEntry, AcmdScripts>> = RwLock::new(BTreeMap::new());
+pub static ACMD_SCRIPTS_DEV: RwLock<BTreeMap<AgentEntry, AcmdScripts>> = RwLock::new(BTreeMap::new());
 pub static STATUS_SCRIPTS: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =
     RwLock::new(BTreeMap::new());
 pub static STATUS_SCRIPTS_DEV: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =

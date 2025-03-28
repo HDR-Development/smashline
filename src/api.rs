@@ -6,7 +6,7 @@ use std::{
 use acmd_engine::action::ActionRegistry;
 use rtld::Section;
 use smashline::{
-    Acmd, AcmdFunction, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
+    Acmd, AcmdFunction, AgentEntry, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
 };
 
 use crate::{
@@ -95,14 +95,14 @@ pub extern "C" fn smashline_install_acmd_script_costume(
     if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
         crate::create_agent::ACMD_SCRIPTS_DEV
             .write()
-            .entry(agent)
+            .entry(AgentEntry::new(agent.0, costume.data))
             .or_default()
             .set_script(script, category, AcmdScript { function, priority, costume });
         return;
     }
     crate::create_agent::ACMD_SCRIPTS
         .write()
-        .entry(agent)
+        .entry(AgentEntry::new(agent.0, costume.data))
         .or_default()
         .set_script(script, category, AcmdScript { function, priority, costume });
 }
