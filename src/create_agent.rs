@@ -251,7 +251,7 @@ fn install_script(
     user_scripts: &mut HashMap<Hash40, UserScript>,
     is_weapon: bool,
 ) {
-    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon);
+    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
     let has_costume = crate::utils::has_costume(agent_hash, costume);
     let entry = AgentEntry::new(
         agent_hash.0,
@@ -744,7 +744,7 @@ fn install_status_scripts(
     let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref()).unwrap();
     let is_weapon = data.is_weapon;
 
-    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon);
+    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
     let has_costume = crate::utils::has_costume(data.hash, costume);
 
     let mut max_new = old_total;
@@ -868,7 +868,7 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
         }
     }
 
-    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon);
+    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
     let has_costume = crate::utils::has_costume(hash, costume);
 
     let callbacks = CALLBACKS.read();

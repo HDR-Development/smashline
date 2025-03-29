@@ -37,7 +37,7 @@ pub fn get_weapon_code_dependency(id: i32) -> Option<i32> {
     try_get_new_agent(&agents, id, current_owner).and_then(|x| x.use_original_code.then_some(x.old_owner_id))
 }
 
-pub fn get_costume_from_entry_id(entry_id: i32) -> i32 {
+pub fn get_costume_from_entry_id(entry_id: i32) -> Option<i32> {
     unsafe {
         const VEC_OFFSET: u64 = 0x5324680;
         let some_vec = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + VEC_OFFSET;
@@ -47,11 +47,16 @@ pub fn get_costume_from_entry_id(entry_id: i32) -> i32 {
         let some_struct = *((some_vec + index + 0xe8) as *const u64);
 
         const COSTUME_OFFSET: u64 = 100;
-        *((some_struct + COSTUME_OFFSET) as *const u64) as i32
+        let ptr = ((some_struct + COSTUME_OFFSET) as *const u64);
+        if ptr as u64 == 0x64 { // entry articles
+            None
+        } else {
+            Some(*(ptr as *const i32))
+        }
     }
 }
 
-pub fn get_agent_costume(battle_object: *const BattleObject, is_weapon: bool) -> i32 {
+pub fn get_agent_costume(battle_object: *const BattleObject, is_weapon: bool) -> Option<i32> {
     unsafe {
         let entry_id = if is_weapon {
             CURRENT_PLAYER_ID.load(Ordering::Relaxed) as i32
