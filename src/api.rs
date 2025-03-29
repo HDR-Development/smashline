@@ -95,14 +95,14 @@ pub extern "C" fn smashline_install_acmd_script_costume(
     if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
         crate::create_agent::ACMD_SCRIPTS_DEV
             .write()
-            .entry(AgentEntry::new(agent.0, costume.data))
+            .entry(AgentEntry::new(agent.0, costume))
             .or_default()
             .set_script(script, category, AcmdScript { function, priority, costume });
         return;
     }
     crate::create_agent::ACMD_SCRIPTS
         .write()
-        .entry(AgentEntry::new(agent.0, costume.data))
+        .entry(AgentEntry::new(agent.0, costume))
         .or_default()
         .set_script(script, category, AcmdScript { function, priority, costume });
 }

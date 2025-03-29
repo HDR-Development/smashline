@@ -47,14 +47,17 @@ impl std::fmt::Display for Priority {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct AgentEntry {
     pub hash: u64,
-    pub costume_data: *const usize
+    pub costume_data: Vec<usize>,
 }
 impl AgentEntry {
-    pub fn new(hash: u64, costume_data: *const usize) -> Self {
-        Self { hash, costume_data }
+    pub fn new(agent: u64, costume: Costume) -> Self {
+        Self { 
+            hash: agent, 
+            costume_data: costume.as_slice().to_vec()
+        }
     }
 }
 

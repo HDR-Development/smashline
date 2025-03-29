@@ -254,8 +254,8 @@ fn install_script(
     let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon);
     let has_costume = crate::utils::has_costume(agent_hash, costume);
     let entry = AgentEntry::new(
-        agent_hash.0, 
-        crate::utils::get_costume_data(agent_hash, costume).data
+        agent_hash.0,
+        crate::utils::get_costume_data(agent_hash, costume)
     );
 
     let acmd_scripts = acmd_scripts.read();
