@@ -261,13 +261,13 @@ fn install_script(
     let acmd_scripts = acmd_scripts.read();
     if let Some(scripts) = acmd_scripts.get(&entry) {
         for (hash, script) in scripts.get_scripts(acmd) {
-            let c = script.costume;
+            let c = script.costume.as_slice();
 
-            if has_costume && !c.as_slice().contains(&(costume as usize)) {
+            if has_costume && !c.contains(&(costume as usize)) {
                 continue;
             }
 
-            if !has_costume && !c.data.is_null() {
+            if !has_costume && !c.is_empty() {
                 continue;
             }
 
@@ -750,13 +750,13 @@ fn install_status_scripts(
     let mut max_new = old_total;
 
     for status in list.iter() {
-        let c = status.costume;
+        let c = status.costume.as_slice();
 
-        if has_costume && !c.as_slice().contains(&(costume as usize)) {
+        if has_costume && !c.contains(&(costume as usize)) {
             continue;
         }
 
-        if !has_costume && !c.data.is_null() {
+        if !has_costume && !c.is_empty() {
             continue;
         }
 
@@ -876,13 +876,13 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
 
     for callback in callbacks.iter() {
         if callback.hash == Some(hash) {
-            let c = callback.costume;
+            let c = callback.costume.as_slice();
 
-            if has_costume && !c.as_slice().contains(&(costume as usize)) {
+            if has_costume && !c.contains(&(costume as usize)) {
                 continue;
             }
 
-            if !has_costume && !c.data.is_null() {
+            if !has_costume && !c.is_empty() {
                 continue;
             }
 

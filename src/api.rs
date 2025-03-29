@@ -115,7 +115,7 @@ pub extern "C" fn smashline_install_acmd_script(
     priority: Priority,
     function: unsafe extern "C" fn(&mut L2CAgentBase),
 ) {
-    smashline_install_acmd_script_costume(agent, Costume { data: std::ptr::null(), len: 0 }, script, category, priority, function);
+    smashline_install_acmd_script_costume(agent, Costume::default(), script, category, priority, function);
 }
 
 #[no_mangle]
@@ -162,7 +162,7 @@ pub extern "C" fn smashline_install_status_script(
     line: StatusLine,
     function: *const (),
 ) {
-    smashline_install_status_script_costume(agent, Costume { data: std::ptr::null(), len: 0 }, status, line, function);
+    smashline_install_status_script_costume(agent, Costume::default(), status, line, function);
 }
 
 #[no_mangle]
@@ -192,7 +192,7 @@ pub extern "C" fn smashline_install_line_callback(
     line: StatusLine,
     function: *const (),
 ) {
-    smashline_install_line_callback_costume(agent, Costume { data: std::ptr::null(), len: 0 }, line, function);
+    smashline_install_line_callback_costume(agent, Costume::default(), line, function);
 }
 
 #[no_mangle]
