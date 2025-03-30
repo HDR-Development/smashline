@@ -232,18 +232,36 @@ pub extern "C" fn smashline_get_original_status(
 }
 
 #[no_mangle]
+pub extern "C" fn smashline_install_state_callback_costume(
+    agent: Option<NonZeroU64>,
+    costume: Costume,
+    event: ObjectEvent,
+    function: StateCallbackFunction,
+) {
+    let agent = agent.map(|value| Hash40(value.get()));
+
+    if agent != Some(Hash40::new("fighter"))
+    && agent != Some(Hash40::new("weapon")) {
+        mark_costume(agent.unwrap(), costume);
+    }
+
+    crate::state_callback::STATE_CALLBACKS
+        .write()
+        .push(StateCallback {
+            agent,
+            event,
+            function,
+            costume,
+        });
+}
+
+#[no_mangle]
 pub extern "C" fn smashline_install_state_callback(
     agent: Option<NonZeroU64>,
     event: ObjectEvent,
     function: StateCallbackFunction,
 ) {
-    crate::state_callback::STATE_CALLBACKS
-        .write()
-        .push(StateCallback {
-            agent: agent.map(|x| Hash40(x.get())),
-            event,
-            function,
-        });
+    smashline_install_state_callback_costume(agent, Costume::default(), event, function);
 }
 
 #[no_mangle]

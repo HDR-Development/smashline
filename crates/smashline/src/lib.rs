@@ -400,6 +400,13 @@ decl_imports! {
         original: &'static locks::RwLock<*const ()>
     );
 
+    fn smashline_install_state_callback_costume(
+        agent: Option<NonZeroU64>,
+        costume: Costume,
+        event: ObjectEvent,
+        callback: *const ()
+    );
+
     fn smashline_install_state_callback(
         agent: Option<NonZeroU64>,
         event: ObjectEvent,
@@ -589,6 +596,15 @@ pub mod api {
                 std::mem::transmute(original),
             );
         }
+    }
+
+    pub fn install_state_callback_costume(agent: Option<Hash40>, costume: Costume, event: ObjectEvent, function: *const ()) {
+        smashline_install_state_callback_costume(
+            agent.and_then(|x| NonZeroU64::new(extract_hash(x))),
+            costume,
+            event,
+            function,
+        );
     }
 
     pub fn install_state_callback(agent: Option<Hash40>, event: ObjectEvent, function: *const ()) {

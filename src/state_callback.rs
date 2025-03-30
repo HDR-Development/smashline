@@ -1,7 +1,7 @@
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
 use smash::app::BattleObject;
-use smashline::{BattleObjectCategory, Hash40, L2CFighterBase, ObjectEvent};
+use smashline::{BattleObjectCategory, Costume, Hash40, L2CFighterBase, ObjectEvent};
 
 pub type StateCallbackFunction = unsafe extern "C" fn(&mut L2CFighterBase);
 
@@ -9,6 +9,7 @@ pub struct StateCallback {
     pub agent: Option<Hash40>,
     pub event: ObjectEvent,
     pub function: StateCallbackFunction,
+    pub costume: Costume,
 }
 
 pub static STATE_CALLBACKS: RwLock<Vec<StateCallback>> = RwLock::new(Vec::new());
@@ -17,18 +18,33 @@ fn call_state_callback(agent: &mut L2CFighterBase, event: ObjectEvent) {
     let hash = crate::create_agent::agent_hash(agent);
     let callbacks = STATE_CALLBACKS.read();
 
+    let object: &mut BattleObject = unsafe {std::mem::transmute(agent.battle_object)};
+    let category = BattleObjectCategory::from_battle_object_id(object.battle_object_id);
+
+    let is_weapon = match category {
+        Some(BattleObjectCategory::Weapon) => true,
+        _ => false,
+    };
+
+    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
+    let has_costume = crate::utils::has_costume(hash, costume);
+
     for callback in callbacks.iter().filter(|cb| cb.event == event) {
         if let Some(required) = callback.agent {
             if hash != required {
-                let object: &mut BattleObject = unsafe {std::mem::transmute(agent.battle_object)};
-                if let Some(category) = BattleObjectCategory::from_battle_object_id(object.battle_object_id) {
-                    match category {
-                        BattleObjectCategory::Fighter => if required != Hash40::new("fighter") { continue; },
-                        BattleObjectCategory::Weapon => if required != Hash40::new("weapon") { continue; },
-                        _ => { continue; }
-                    }
+                match category {
+                    Some(BattleObjectCategory::Fighter) => if required != Hash40::new("fighter") { continue; },
+                    Some(BattleObjectCategory::Weapon) => if required != Hash40::new("weapon") { continue; },
+                    _ => { continue; },
                 }
-                else {
+            } else {
+                let c = callback.costume.as_slice();
+
+                if has_costume && !c.contains(&(costume as usize)) {
+                    continue;
+                }
+
+                if !has_costume && !c.is_empty() {
                     continue;
                 }
             }

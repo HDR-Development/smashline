@@ -284,8 +284,9 @@ impl Agent {
         }
 
         for event in self.events.iter() {
-            crate::api::install_state_callback(
+            crate::api::install_state_callback_costume(
                 Some(self.kind_hash),
+                self.costume,
                 event.event,
                 event.function as *const (),
             );
