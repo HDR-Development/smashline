@@ -47,11 +47,11 @@ pub fn get_costume_from_entry_id(entry_id: i32) -> Option<i32> {
         let some_struct = *((some_vec + index + 0xe8) as *const u64);
 
         const COSTUME_OFFSET: u64 = 100;
-        let ptr = ((some_struct + COSTUME_OFFSET) as *const u64);
+        let ptr = (some_struct + COSTUME_OFFSET) as *const i32;
         if ptr as u64 == 0x64 { // entry articles
             None
         } else {
-            Some(*(ptr as *const i32))
+            Some(*ptr)
         }
     }
 }

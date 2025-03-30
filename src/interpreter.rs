@@ -34,7 +34,7 @@ pub fn get_scripts(fighter_name: &str, weapon_name: Option<&str>) -> Vec<LoadedS
     let read_dir = match std::fs::read_dir(&path) {
         Ok(read_dir) => read_dir,
         Err(e) => {
-            println!("Failed to get scripts: {e}");
+            // println!("Failed to get scripts: {e}");
             return vec![];
         }
     };
