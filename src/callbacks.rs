@@ -1,7 +1,7 @@
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
 use smash::lib::L2CValue;
-use smashline::{Hash40, L2CFighterBase, StatusLine, Variadic};
+use smashline::{Costume, Hash40, L2CFighterBase, StatusLine, Variadic};
 
 pub type Callback = extern "C" fn(&mut L2CFighterBase);
 pub type Callback1 = extern "C" fn(&mut L2CFighterBase, &mut L2CValue);
@@ -81,6 +81,7 @@ impl StatusCallbackFunction {
 pub struct StatusCallback {
     pub hash: Option<Hash40>,
     pub function: StatusCallbackFunction,
+    pub costume: Costume,
 }
 
 pub static CALLBACKS: RwLock<Vec<StatusCallback>> = RwLock::new(Vec::new());

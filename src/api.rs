@@ -6,7 +6,7 @@ use std::{
 use acmd_engine::action::ActionRegistry;
 use rtld::Section;
 use smashline::{
-    Acmd, AcmdFunction, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
+    Acmd, AcmdFunction, AgentEntry, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
 };
 
 use crate::{
@@ -18,6 +18,38 @@ use crate::{
     },
     state_callback::{StateCallback, StateCallbackFunction},
 };
+
+fn mark_costume(
+    agent: Hash40,
+    costume: Costume,
+) {
+    let costume_slice = costume.as_slice();
+
+    if costume_slice.is_empty() {
+        return;
+    }
+
+    let mut costumes = crate::create_agent::COSTUMES.write();
+    let costumes = costumes
+        .entry(agent)
+        .or_default();
+
+    for c in &mut *costumes {
+        if costume_slice == c.as_slice() {
+            return;
+        }
+
+        let exists = costume_slice.iter().any(|e| {
+            c.as_slice().contains(e)
+        });
+
+        if exists {
+            // TODO: Do something if a costume has already been marked for this agent
+        }
+    }
+
+    costumes.push(costume);
+}
 
 #[no_mangle]
 pub extern "C" fn smashline_remove_by_plugin_range(start: usize, end: usize) {
@@ -50,6 +82,32 @@ pub extern "C" fn smashline_remove_by_plugin_range(start: usize, end: usize) {
 }
 
 #[no_mangle]
+pub extern "C" fn smashline_install_acmd_script_costume(
+    agent: Hash40,
+    costume: Costume,
+    script: Hash40,
+    category: Acmd,
+    priority: Priority,
+    function: unsafe extern "C" fn(&mut L2CAgentBase),
+) {
+    mark_costume(agent, costume);
+
+    if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
+        crate::create_agent::ACMD_SCRIPTS_DEV
+            .write()
+            .entry(AgentEntry::new(agent.0, costume))
+            .or_default()
+            .set_script(script, category, AcmdScript { function, priority, costume });
+        return;
+    }
+    crate::create_agent::ACMD_SCRIPTS
+        .write()
+        .entry(AgentEntry::new(agent.0, costume))
+        .or_default()
+        .set_script(script, category, AcmdScript { function, priority, costume });
+}
+
+#[no_mangle]
 pub extern "C" fn smashline_install_acmd_script(
     agent: Hash40,
     script: Hash40,
@@ -57,24 +115,13 @@ pub extern "C" fn smashline_install_acmd_script(
     priority: Priority,
     function: unsafe extern "C" fn(&mut L2CAgentBase),
 ) {
-    if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
-        crate::create_agent::ACMD_SCRIPTS_DEV
-            .write()
-            .entry(agent)
-            .or_default()
-            .set_script(script, category, AcmdScript { function, priority });
-        return;
-    }
-    crate::create_agent::ACMD_SCRIPTS
-        .write()
-        .entry(agent)
-        .or_default()
-        .set_script(script, category, AcmdScript { function, priority });
+    smashline_install_acmd_script_costume(agent, Costume::default(), script, category, priority, function);
 }
 
 #[no_mangle]
-pub extern "C" fn smashline_install_status_script(
+pub extern "C" fn smashline_install_status_script_costume(
     agent: Option<NonZeroU64>,
+    costume: Costume,
     status: i32,
     line: StatusLine,
     function: *const (),
@@ -82,6 +129,8 @@ pub extern "C" fn smashline_install_status_script(
     let agent = agent
         .map(|x| Hash40(x.get()))
         .unwrap_or(Hash40::new("common"));
+
+    mark_costume(agent, costume);
 
     if unsafe { crate::runtime_reload::LOADING_DEVELOPMENT_SCRIPTS } {
         crate::create_agent::STATUS_SCRIPTS_DEV
@@ -91,6 +140,7 @@ pub extern "C" fn smashline_install_status_script(
             .push(StatusScript {
                 id: status,
                 function: StatusScriptFunction::from_line(line, function),
+                costume
             });
         return;
     }
@@ -101,7 +151,39 @@ pub extern "C" fn smashline_install_status_script(
         .push(StatusScript {
             id: status,
             function: StatusScriptFunction::from_line(line, function),
+            costume
         });
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_install_status_script(
+    agent: Option<NonZeroU64>,
+    status: i32,
+    line: StatusLine,
+    function: *const (),
+) {
+    smashline_install_status_script_costume(agent, Costume::default(), status, line, function);
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_install_line_callback_costume(
+    agent: Option<NonZeroU64>,
+    costume: Costume,
+    line: StatusLine,
+    function: *const (),
+) {
+    let agent = agent.map(|value| Hash40(value.get()));
+
+    if agent != Some(Hash40::new("fighter"))
+    && agent != Some(Hash40::new("weapon")) {
+        mark_costume(agent.unwrap(), costume);
+    }
+
+    crate::callbacks::CALLBACKS.write().push(StatusCallback {
+        hash: agent,
+        function: StatusCallbackFunction::new(line, function),
+        costume,
+    });
 }
 
 #[no_mangle]
@@ -110,12 +192,7 @@ pub extern "C" fn smashline_install_line_callback(
     line: StatusLine,
     function: *const (),
 ) {
-    let agent = agent.map(|value| Hash40(value.get()));
-
-    crate::callbacks::CALLBACKS.write().push(StatusCallback {
-        hash: agent,
-        function: StatusCallbackFunction::new(line, function),
-    });
+    smashline_install_line_callback_costume(agent, Costume::default(), line, function);
 }
 
 #[no_mangle]
@@ -155,18 +232,36 @@ pub extern "C" fn smashline_get_original_status(
 }
 
 #[no_mangle]
+pub extern "C" fn smashline_install_state_callback_costume(
+    agent: Option<NonZeroU64>,
+    costume: Costume,
+    event: ObjectEvent,
+    function: StateCallbackFunction,
+) {
+    let agent = agent.map(|value| Hash40(value.get()));
+
+    if agent != Some(Hash40::new("fighter"))
+    && agent != Some(Hash40::new("weapon")) {
+        mark_costume(agent.unwrap(), costume);
+    }
+
+    crate::state_callback::STATE_CALLBACKS
+        .write()
+        .push(StateCallback {
+            agent,
+            event,
+            function,
+            costume,
+        });
+}
+
+#[no_mangle]
 pub extern "C" fn smashline_install_state_callback(
     agent: Option<NonZeroU64>,
     event: ObjectEvent,
     function: StateCallbackFunction,
 ) {
-    crate::state_callback::STATE_CALLBACKS
-        .write()
-        .push(StateCallback {
-            agent: agent.map(|x| Hash40(x.get())),
-            event,
-            function,
-        });
+    smashline_install_state_callback_costume(agent, Costume::default(), event, function);
 }
 
 #[no_mangle]

@@ -1,4 +1,4 @@
-use crate::{AsHash40, ObjectEvent, Priority, StatusLine};
+use crate::{AsHash40, Costume, ObjectEvent, Priority, StatusLine};
 
 pub type AcmdFunction = unsafe extern "C" fn(&mut crate::L2CAgentBase);
 
@@ -92,6 +92,7 @@ struct StatusScript {
 
 pub struct Agent {
     kind_hash: crate::Hash40,
+    costume: Costume,
     acmd: Vec<AcmdScript>,
     lines: Vec<LineCallback>,
     status: Vec<StatusScript>,
@@ -102,11 +103,17 @@ impl Agent {
     pub fn new(agent: impl AsHash40) -> Self {
         Self {
             kind_hash: agent.as_hash40(),
+            costume: Costume::default(),
             acmd: vec![],
             lines: vec![],
             status: vec![],
             events: vec![],
         }
+    }
+
+    pub fn set_costume(&mut self, costumes: Vec<usize>) -> &mut Self {
+        self.costume = Costume::from_vec(costumes);
+        self
     }
 
     pub fn acmd(&mut self, name: &str, function: AcmdFunction, priority: Priority) -> &mut Self {
@@ -247,8 +254,9 @@ impl Agent {
 
     pub fn install(&self) {
         for acmd in self.acmd.iter() {
-            crate::api::install_acmd_script(
+            crate::api::install_acmd_script_costume(
                 self.kind_hash,
+                self.costume,
                 acmd.replaces,
                 acmd.category,
                 acmd.priority,
@@ -257,8 +265,9 @@ impl Agent {
         }
 
         for status in self.status.iter() {
-            crate::api::install_status_script(
+            crate::api::install_status_script_costume(
                 Some(self.kind_hash),
+                self.costume,
                 status.line,
                 status.kind,
                 status.function,
@@ -266,12 +275,18 @@ impl Agent {
         }
 
         for line in self.lines.iter() {
-            crate::api::install_line_callback(Some(self.kind_hash), line.line, line.function);
+            crate::api::install_line_callback_costume(
+                Some(self.kind_hash),
+                self.costume,
+                line.line,
+                line.function
+            );
         }
 
         for event in self.events.iter() {
-            crate::api::install_state_callback(
+            crate::api::install_state_callback_costume(
                 Some(self.kind_hash),
+                self.costume,
                 event.event,
                 event.function as *const (),
             );

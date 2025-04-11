@@ -17,7 +17,7 @@ use smash::{
     lua_State,
 };
 use smashline::{
-    locks::RwLock, Acmd, AcmdFunction, AsHash40, BattleObjectCategory, Hash40, L2CAgentBase,
+    locks::RwLock, Acmd, AcmdFunction, AgentEntry, AsHash40, BattleObjectCategory, Costume, Hash40, L2CAgentBase,
     L2CFighterBase, L2CValue, Priority, StatusLine, Variadic,
 };
 use vtables::{CustomDataAccessError, VirtualClass};
@@ -166,12 +166,14 @@ impl StatusScriptFunction {
 pub struct StatusScript {
     pub id: i32,
     pub function: StatusScriptFunction,
+    pub costume: Costume,
 }
 
 #[derive(Copy, Clone)]
 pub struct AcmdScript {
     pub function: unsafe extern "C" fn(&mut L2CAgentBase),
     pub priority: Priority,
+    pub costume: Costume,
 }
 
 type AcmdScriptSet = HashMap<Hash40, AcmdScript>;
@@ -228,7 +230,11 @@ fn check_installed_script(acmd_map: &mut AcmdScriptSet, name: Hash40, category: 
             acmd_map.insert(name, script)
         }
         else {
-            println!("[smashline] Script {:#x} of {} already replaced with {}", name.0, category, script.priority);
+            if script_old.priority == script.priority {
+                println!("[smashline] Script {:#x} of {} already exists with {}! Check for duplicates!", name.0, category, script_old.priority);
+            } else {
+                println!("[smashline] Script {:#x} of {} with {} will be bypassed. Already installed with {}.", name.0, category, script.priority, script_old.priority);
+            }
             None
         }
     }
@@ -237,12 +243,52 @@ fn check_installed_script(acmd_map: &mut AcmdScriptSet, name: Hash40, category: 
     }
 }
 
-pub static ACMD_SCRIPTS: RwLock<BTreeMap<Hash40, AcmdScripts>> = RwLock::new(BTreeMap::new());
-pub static ACMD_SCRIPTS_DEV: RwLock<BTreeMap<Hash40, AcmdScripts>> = RwLock::new(BTreeMap::new());
+fn install_script(
+    acmd_scripts: &RwLock<BTreeMap<AgentEntry, AcmdScripts>>,
+    agent_hash: Hash40,
+    acmd: Acmd,
+    agent: &mut L2CAgentBase,
+    user_scripts: &mut HashMap<Hash40, UserScript>,
+    is_weapon: bool,
+) {
+    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
+    let has_costume = crate::utils::has_costume(agent_hash, costume);
+    let entry = AgentEntry::new(
+        agent_hash.0,
+        crate::utils::get_costume_data(agent_hash, costume)
+    );
+
+    let acmd_scripts = acmd_scripts.read();
+    if let Some(scripts) = acmd_scripts.get(&entry) {
+        for (hash, script) in scripts.get_scripts(acmd) {
+            let c = script.costume.as_slice();
+
+            if has_costume && !c.contains(&(costume as usize)) {
+                continue;
+            }
+
+            if !has_costume && !c.is_empty() {
+                continue;
+            }
+
+            agent.sv_set_function_hash(
+                unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
+                *hash,
+            );
+
+            user_scripts.insert(*hash, UserScript::Function(script.function));
+        }
+    }
+}
+
+pub static ACMD_SCRIPTS: RwLock<BTreeMap<AgentEntry, AcmdScripts>> = RwLock::new(BTreeMap::new());
+pub static ACMD_SCRIPTS_DEV: RwLock<BTreeMap<AgentEntry, AcmdScripts>> = RwLock::new(BTreeMap::new());
 pub static STATUS_SCRIPTS: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =
     RwLock::new(BTreeMap::new());
 pub static STATUS_SCRIPTS_DEV: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =
     RwLock::new(BTreeMap::new());
+
+pub static COSTUMES: RwLock<BTreeMap<Hash40, Vec<Costume>>> = RwLock::new(BTreeMap::new());
 
 pub const LOWERCASE_FIGHTER_NAMES: StaticArrayAccessor<&'static str> =
     StaticArrayAccessor::new(0x4f81e20, 118);
@@ -498,29 +544,8 @@ fn create_agent_hook(
                 );
             }
 
-            let acmd_scripts = ACMD_SCRIPTS.read();
-            if let Some(scripts) = acmd_scripts.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
-                        *hash,
-                    );
-
-                    user_scripts.insert(*hash, UserScript::Function(script.function));
-                }
-            }
-
-            let acmd_scripts_dev = ACMD_SCRIPTS_DEV.read();
-            if let Some(scripts) = acmd_scripts_dev.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
-                        *hash,
-                    );
-
-                    user_scripts.insert(*hash, UserScript::Function(script.function));
-                }
-            }
+            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts, false);
+            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts, false);
 
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
@@ -609,29 +634,8 @@ fn create_agent_hook(
                 );
             }
 
-            let acmd_scripts = ACMD_SCRIPTS.read();
-            if let Some(scripts) = acmd_scripts.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
-                        *hash,
-                    );
-
-                    user_scripts.insert(*hash, UserScript::Function(script.function));
-                }
-            }
-
-            let acmd_scripts_dev = ACMD_SCRIPTS_DEV.read();
-            if let Some(scripts) = acmd_scripts_dev.get(&hash) {
-                for (hash, script) in scripts.get_scripts(acmd) {
-                    agent.sv_set_function_hash(
-                        unsafe { std::mem::transmute(unreachable_smashline_script as *const ()) },
-                        *hash,
-                    );
-
-                    user_scripts.insert(*hash, UserScript::Function(script.function));
-                }
-            }
+            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts, true);
+            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts, true);
 
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
@@ -737,11 +741,27 @@ fn install_status_scripts(
     list: &[StatusScript],
     agent: &mut L2CFighterWrapper,
 ) -> i32 {
+    let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref()).unwrap();
+    let is_weapon = data.is_weapon;
+
+    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
+    let has_costume = crate::utils::has_costume(data.hash, costume);
+
     let mut max_new = old_total;
+
     for status in list.iter() {
+        let c = status.costume.as_slice();
+
+        if has_costume && !c.contains(&(costume as usize)) {
+            continue;
+        }
+
+        if !has_costume && !c.is_empty() {
+            continue;
+        }
+
         max_new = max_new.max(status.id + 1);
-    }
-    for status in list.iter() {
+
         use StatusScriptFunction::*;
 
         macro_rules! set {
@@ -848,11 +868,24 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
         }
     }
 
+    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
+    let has_costume = crate::utils::has_costume(hash, costume);
+
     let callbacks = CALLBACKS.read();
     let mut status_callbacks = Vec::new();
 
     for callback in callbacks.iter() {
         if callback.hash == Some(hash) {
+            let c = callback.costume.as_slice();
+
+            if has_costume && !c.contains(&(costume as usize)) {
+                continue;
+            }
+
+            if !has_costume && !c.is_empty() {
+                continue;
+            }
+
             status_callbacks.push(callback.function);
         }
         else if is_weapon {
@@ -875,27 +908,19 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
 
     let mut new_total = old_total;
 
-    if is_weapon {
-        if let Some(common) = statuses.get(&Hash40::new("weapon")) {
-            new_total = new_total.max(install_status_scripts(old_total, common, agent));
-        }
-        if let Some(common) = statuses_dev.get(&Hash40::new("weapon")) {
-            new_total = new_total.max(install_status_scripts(old_total, common, agent));
-        }
+    let hashes: &[Hash40] = if is_weapon {
+        &[Hash40::new("weapon"), hash]
     } else {
-        if let Some(common) = statuses.get(&Hash40::new("fighter")) {
-            new_total = new_total.max(install_status_scripts(old_total, common, agent));
-        }
-        if let Some(common) = statuses_dev.get(&Hash40::new("fighter")) {
-            new_total = new_total.max(install_status_scripts(old_total, common, agent));
-        }
-    }
+        &[Hash40::new("fighter"), hash]
+    };
 
-    if let Some(common) = statuses.get(&hash) {
-        new_total = new_total.max(install_status_scripts(old_total, common, agent));
-    }
-    if let Some(common) = statuses_dev.get(&hash) {
-        new_total = new_total.max(install_status_scripts(old_total, common, agent));
+    for h in hashes {
+        if let Some(common) = statuses.get(h) {
+            new_total = new_total.max(install_status_scripts(old_total, common, agent));
+        }
+        if let Some(common) = statuses_dev.get(h) {
+            new_total = new_total.max(install_status_scripts(old_total, common, agent));
+        }
     }
 
     agent.0.global_table.try_table_mut().unwrap()[0xC] = smash::lib::L2CValue::new(new_total);

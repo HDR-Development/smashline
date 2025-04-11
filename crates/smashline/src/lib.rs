@@ -47,6 +47,51 @@ impl std::fmt::Display for Priority {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct AgentEntry {
+    pub hash: u64,
+    pub costume_data: Vec<usize>,
+}
+impl AgentEntry {
+    pub fn new(agent: u64, costume: Costume) -> Self {
+        Self { 
+            hash: agent, 
+            costume_data: costume.as_slice().to_vec()
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+pub struct Costume {
+    pub data: *const usize,
+    pub len: usize,
+}
+impl Default for Costume {
+    fn default() -> Self {
+        Costume { data: std::ptr::null(), len: 0 }
+    }
+}
+
+impl Costume {
+    pub fn from_vec(vec: Vec<usize>) -> Self {
+        let len = vec.len();
+        let data = vec.as_ptr();
+        std::mem::forget(vec);
+        Costume { data, len }
+    }
+
+    pub fn as_slice(self) -> &'static [usize] {
+        unsafe {
+            if self.data.is_null() || self.len == 0 {
+                return &[];
+            }
+
+            std::slice::from_raw_parts(self.data, self.len)
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub enum Acmd {
@@ -299,6 +344,15 @@ decl_imports! {
 
     fn smashline_get_action_registry() -> &'static acmd_engine::action::ActionRegistry;
 
+    fn smashline_install_acmd_script_costume(
+        agent: Hash40,
+        costume: Costume,
+        script: Hash40,
+        category: Acmd,
+        priority: Priority,
+        function: unsafe extern "C" fn(&mut L2CAgentBase)
+    );
+
     fn smashline_install_acmd_script(
         agent: Hash40,
         script: Hash40,
@@ -307,11 +361,26 @@ decl_imports! {
         function: unsafe extern "C" fn(&mut L2CAgentBase)
     );
 
+    fn smashline_install_status_script_costume(
+        agent: Option<NonZeroU64>,
+        costume: Costume,
+        status: i32,
+        line: StatusLine,
+        function: *const ()
+    );
+
     fn smashline_install_status_script(
         agent: Option<NonZeroU64>,
         status: i32,
         line: StatusLine,
         function: *const ()
+    );
+
+    fn smashline_install_line_callback_costume(
+        agent: Option<NonZeroU64>,
+        costume: Costume,
+        line: StatusLine,
+        callback: *const ()
     );
 
     fn smashline_install_line_callback(
@@ -329,6 +398,13 @@ decl_imports! {
         symbol: StringFFI,
         replacement: *const (),
         original: &'static locks::RwLock<*const ()>
+    );
+
+    fn smashline_install_state_callback_costume(
+        agent: Option<NonZeroU64>,
+        costume: Costume,
+        event: ObjectEvent,
+        callback: *const ()
     );
 
     fn smashline_install_state_callback(
@@ -443,6 +519,17 @@ pub mod api {
         smashline_get_action_registry().register::<A>();
     }
 
+    pub fn install_status_script_costume(
+        agent: Option<Hash40>,
+        costume: Costume,
+        line: StatusLine,
+        kind: i32,
+        function: *const (),
+    ) {
+        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
+        smashline_install_status_script_costume(agent, costume, kind, line, function);
+    }
+
     pub fn install_status_script(
         agent: Option<Hash40>,
         line: StatusLine,
@@ -453,9 +540,34 @@ pub mod api {
         smashline_install_status_script(agent, kind, line, function);
     }
 
-    pub fn install_line_callback(agent: Option<Hash40>, line: StatusLine, function: *const ()) {
+    pub fn install_line_callback_costume(
+        agent: Option<Hash40>,
+        costume: Costume,
+        line: StatusLine,
+        function: *const (),
+    ) {
+        let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
+        smashline_install_line_callback_costume(agent, costume, line, function);
+    }
+
+    pub fn install_line_callback(
+        agent: Option<Hash40>,
+        line: StatusLine,
+        function: *const (),
+    ) {
         let agent = agent.and_then(|x| NonZeroU64::new(extract_hash(x)));
         smashline_install_line_callback(agent, line, function);
+    }
+
+    pub fn install_acmd_script_costume(
+        agent: Hash40,
+        costume: Costume,
+        script: Hash40,
+        category: Acmd,
+        priority: Priority,
+        function: unsafe extern "C" fn(&mut L2CAgentBase),
+    ) {
+        smashline_install_acmd_script_costume(agent, costume, script, category, priority, function);
     }
 
     pub fn install_acmd_script(
@@ -484,6 +596,15 @@ pub mod api {
                 std::mem::transmute(original),
             );
         }
+    }
+
+    pub fn install_state_callback_costume(agent: Option<Hash40>, costume: Costume, event: ObjectEvent, function: *const ()) {
+        smashline_install_state_callback_costume(
+            agent.and_then(|x| NonZeroU64::new(extract_hash(x))),
+            costume,
+            event,
+            function,
+        );
     }
 
     pub fn install_state_callback(agent: Option<Hash40>, event: ObjectEvent, function: *const ()) {

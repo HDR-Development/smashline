@@ -94,8 +94,10 @@
 //! might display an interaction with sloped ground or how rumble is applied will happen in these
 //! scripts.
 //!
-#![feature(new_uninit)]
+#![allow(unused)]
 #![allow(non_snake_case)]
+#![allow(static_mut_refs)]
+#![allow(elided_named_lifetimes)]
 
 mod cloning;
 
