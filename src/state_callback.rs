@@ -21,12 +21,7 @@ fn call_state_callback(agent: &mut L2CFighterBase, event: ObjectEvent) {
     let object: &mut BattleObject = unsafe {std::mem::transmute(agent.battle_object)};
     let category = BattleObjectCategory::from_battle_object_id(object.battle_object_id);
 
-    let is_weapon = match category {
-        Some(BattleObjectCategory::Weapon) => true,
-        _ => false,
-    };
-
-    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
+    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject).unwrap_or(0);
     let has_costume = crate::utils::has_costume(hash, costume);
 
     for callback in callbacks.iter().filter(|cb| cb.event == event) {
