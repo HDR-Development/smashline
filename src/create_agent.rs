@@ -249,9 +249,8 @@ fn install_script(
     acmd: Acmd,
     agent: &mut L2CAgentBase,
     user_scripts: &mut HashMap<Hash40, UserScript>,
-    is_weapon: bool,
 ) {
-    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
+    let costume = crate::utils::get_agent_costume(agent.battle_object as *const BattleObject).unwrap_or(0);
     let has_costume = crate::utils::has_costume(agent_hash, costume);
     let entry = AgentEntry::new(
         agent_hash.0,
@@ -544,8 +543,8 @@ fn create_agent_hook(
                 );
             }
 
-            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts, false);
-            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts, false);
+            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts);
+            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts);
 
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
@@ -634,8 +633,8 @@ fn create_agent_hook(
                 );
             }
 
-            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts, true);
-            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts, true);
+            install_script(&ACMD_SCRIPTS, hash, acmd, agent, &mut user_scripts);
+            install_script(&ACMD_SCRIPTS_DEV, hash, acmd, agent, &mut user_scripts);
 
             let agent: &'static mut L2CAgentBase = unsafe {
                 let wrapper: &'static mut L2CAnimcmdWrapper = std::mem::transmute(agent);
@@ -742,9 +741,7 @@ fn install_status_scripts(
     agent: &mut L2CFighterWrapper,
 ) -> i32 {
     let data = vtables::vtable_custom_data::<_, L2CFighterWrapper>(agent.deref()).unwrap();
-    let is_weapon = data.is_weapon;
-
-    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
+    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject).unwrap_or(0);
     let has_costume = crate::utils::has_costume(data.hash, costume);
 
     let mut max_new = old_total;
@@ -868,7 +865,7 @@ extern "C" fn set_status_scripts(agent: &mut L2CFighterWrapper) {
         }
     }
 
-    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject, is_weapon).unwrap_or(0);
+    let costume = crate::utils::get_agent_costume(agent.0.battle_object as *const BattleObject).unwrap_or(0);
     let has_costume = crate::utils::has_costume(hash, costume);
 
     let callbacks = CALLBACKS.read();
