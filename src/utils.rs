@@ -56,16 +56,9 @@ pub fn get_costume_from_entry_id(entry_id: i32) -> Option<i32> {
     }
 }
 
-pub fn get_agent_costume(battle_object: *const BattleObject, is_weapon: bool) -> Option<i32> {
-    unsafe {
-        let entry_id = if is_weapon {
-            CURRENT_PLAYER_ID.load(Ordering::Relaxed) as i32
-        } else {
-            (*battle_object).entry_id
-        };
-
-        crate::utils::get_costume_from_entry_id(entry_id)
-    }
+pub fn get_agent_costume(battle_object: *const BattleObject) -> Option<i32> {
+    let entry_id = unsafe { (*battle_object).entry_id };
+    crate::utils::get_costume_from_entry_id(entry_id)
 }
 
 pub fn has_costume(hash: Hash40, costume: i32) -> bool {
