@@ -39,9 +39,8 @@ pub fn get_weapon_code_dependency(id: i32) -> Option<i32> {
 
 pub fn get_costume_from_entry_id(entry_id: i32) -> Option<i32> {
     unsafe {
-        const VEC_OFFSET: u64 = 0x5324680;
-        let some_vec = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + VEC_OFFSET;
-        let some_vec = *(some_vec as *const u64);
+        let text = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as *const u64;
+        let some_vec = *text.add(0x5324680 / 0x8);
 
         let index = entry_id as u64 * 8;
         let some_struct = *((some_vec + index + 0xe8) as *const u64);
@@ -58,6 +57,10 @@ pub fn get_costume_from_entry_id(entry_id: i32) -> Option<i32> {
 
 pub fn get_agent_costume(battle_object: *const BattleObject) -> Option<i32> {
     let entry_id = unsafe { (*battle_object).entry_id };
+    if entry_id > 7 || entry_id < 0 {
+        return None;
+    }
+
     crate::utils::get_costume_from_entry_id(entry_id)
 }
 
