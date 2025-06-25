@@ -5,13 +5,13 @@ use smashline::Hash40;
 #[allow(unused)]
 fn effect_manager() -> *mut u64 {
     let text = unsafe { skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as *mut u8 };
-    unsafe { **(text.add(0x5334920).cast::<*mut *mut u64>()) }
+    unsafe { **(text.add(0x5333920).cast::<*mut *mut u64>()) }
 }
 
-#[skyline::from_offset(0x3563990)]
+#[skyline::from_offset(0x3563720)]
 fn unload_effects(manager: *mut u64, handle: u32);
 
-#[skyline::from_offset(0x355fb60)]
+#[skyline::from_offset(0x355f8f0)]
 fn load_effects(manager: *mut u64, handle: u32, search_index: &u32) -> u32;
 
 #[skyline::hook(offset = 0x60bfd8, inline)]

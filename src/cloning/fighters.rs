@@ -84,7 +84,7 @@ unsafe fn lookup_fighter_kind_hash(hash: Hash40) -> i32 {
 //     CURRENT_PLAYER_ID.store(usize::MAX, Ordering::Relaxed);
 // }
 
-#[skyline::hook(offset = 0x3311400)]
+#[skyline::hook(offset = 0x3311190)]
 unsafe fn update_selected_fighter(arg: u64, id: u32, info: *const u32) {
     CURRENT_PLAYER_ID.store(*info as usize - 1, Ordering::Relaxed);
     call_original!(arg, id, info);

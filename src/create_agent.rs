@@ -290,13 +290,13 @@ pub static STATUS_SCRIPTS_DEV: RwLock<BTreeMap<Hash40, Vec<StatusScript>>> =
 pub static COSTUMES: RwLock<BTreeMap<Hash40, Vec<Costume>>> = RwLock::new(BTreeMap::new());
 
 pub const LOWERCASE_FIGHTER_NAMES: StaticArrayAccessor<&'static str> =
-    StaticArrayAccessor::new(0x4f81e20, 118);
+    StaticArrayAccessor::new(0x4f80e20, 118);
 
 pub const LOWERCASE_WEAPON_NAMES: StaticArrayAccessor<&'static str> =
-    StaticArrayAccessor::new(0x5186bd0, 0x267);
+    StaticArrayAccessor::new(0x5185bd0, 0x267);
 
 pub const LOWERCASE_WEAPON_OWNER_NAMES: StaticArrayAccessor<&'static str> =
-    StaticArrayAccessor::new(0x5189240, 0x267);
+    StaticArrayAccessor::new(0x5188240, 0x267);
 
 enum OriginalFunc {
     CreateAgentShare {
@@ -1059,7 +1059,7 @@ fn create_agent_status_fighter(
     Some(unsafe { std::mem::transmute(wrapper) })
 }
 
-#[skyline::hook(offset = 0x33ac150)]
+#[skyline::hook(offset = 0x33abee0)]
 fn create_agent_status_weapon(
     object: &mut BattleObject,
     boma: &mut BattleObjectModuleAccessor,
@@ -1182,10 +1182,10 @@ pub(crate) fn agent_hash(fighter: &L2CFighterBase) -> Hash40 {
         .hash
 }
 
-#[skyline::hook(offset = 0x33b6820, inline)]
+#[skyline::hook(offset = 0x33b65b0, inline)]
 unsafe fn enable_lua_module(ctx: &mut InlineCtx) {
     *ctx.registers[8].x.as_mut() =
-        skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + 0x33b90b0;
+        skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + 0x33b8e40;
 }
 
 pub fn install_status_create_agent_hooks() {
@@ -1201,9 +1201,9 @@ create_agent_hook! {
     0x64c930 => (Effect, fighter);
     0x64cf50 => (Expression, fighter);
     0x64d570 => (Sound, fighter);
-    0x33ad050 => (Game, weapon);
-    0x33adfb0 => (Effect, weapon);
-    0x33aef10 => (Sound, weapon);
+    0x33acde0 => (Game, weapon);
+    0x33add40 => (Effect, weapon);
+    0x33aeca0 => (Sound, weapon);
 }
 
 create_agent_hook! {

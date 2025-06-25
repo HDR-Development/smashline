@@ -2,7 +2,7 @@
 members = ["crates/*"]
 
 [workspace.package]
-version = "1.6.2"
+version = "1.6.3"
 authors = ["blujay <the.blu.dev@gmail.com>"]
 description = "An object script replacement engine for Super Smash Bros. Ultimate"
 edition = "2021"
