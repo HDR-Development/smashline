@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LoadState","LoadingType"],"struct":["FileNX","FilesystemInfo","LoadedData","LoadedDirectory","LoadedFilepath","PathInformation","ResServiceNX"]};
