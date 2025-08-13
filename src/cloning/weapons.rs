@@ -182,12 +182,12 @@ fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: 
 
     let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
     let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { *ctx.registers[source_register].x.as_ref() as i32 }, owner) else {
+    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
         return;
     };
 
     unsafe {
-        *ctx.registers[dst_register].x.as_mut() = agent.owner_id as u64;
+        ctx.registers[dst_register].set_x(agent.owner_id as u64);
     }
 }
 
@@ -198,12 +198,12 @@ fn weapon_owner_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_regis
 
     let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
     let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { *ctx.registers[source_register].x.as_ref() as i32 }, owner) else {
+    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
         return;
     };
 
     unsafe {
-        *ctx.registers[dst_register].x.as_mut() = agent.owner_name_ffi.as_ptr() as u64;
+        ctx.registers[dst_register].set_x(agent.owner_name_ffi.as_ptr() as u64);
     }
 }
 
@@ -214,12 +214,12 @@ fn weapon_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: u
 
     let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
     let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { *ctx.registers[source_register].x.as_ref() as i32 }, owner) else {
+    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
         return;
     };
 
     unsafe {
-        *ctx.registers[dst_register].x.as_mut() = agent.new_name_ffi.as_ptr() as u64;
+        ctx.registers[dst_register].set_x(agent.new_name_ffi.as_ptr() as u64);
     }
 }
 
@@ -277,7 +277,7 @@ macro_rules! decl_hooks_kirby_get_kind {
         $(
             #[skyline::hook(offset = $offset, inline)]
             unsafe fn $name(ctx: &mut InlineCtx) {
-                let kind = *ctx.registers[$knd].x.as_ref() as i32;
+                let kind = ctx.registers[$knd].x() as i32;
                 CURRENT_KIRBY_COPY.store(kind, Ordering::Relaxed);
             }
         )*
@@ -332,7 +332,7 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     let kirby_copy_whitelist = KIRBY_COPY_ARTICLE_WHITELIST.read();
     if let Some(whitelist) = kirby_copy_whitelist.get(&kind) {
         // println!("Fighter {:#x} is in the whitelist!", kind);
-        let original_descriptors = *ctx.registers[store_reg].x.as_ref() as *const StaticArticleData;
+        let original_descriptors = ctx.registers[store_reg].x() as *const StaticArticleData;
         IS_KIRBY_COPYING.store(true, Ordering::Relaxed);
         let fighter_data = get_static_fighter_data(kind);
         CURRENT_KIRBY_COPY.store(-1, Ordering::Relaxed);
@@ -362,7 +362,7 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
             count,
         }));
     
-        *ctx.registers[store_reg].x.as_mut() = static_article_info as *const StaticArticleData as u64;
+        ctx.registers[store_reg].set_x(static_article_info as *const StaticArticleData as u64);
     }
 }
 

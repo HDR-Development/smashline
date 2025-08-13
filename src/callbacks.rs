@@ -93,14 +93,14 @@ fn call_callback(fighter: &mut L2CFighterBase, callback: Callback, _ctx: &Inline
 
 #[inline(always)]
 fn call_callback1(fighter: &mut L2CFighterBase, callback: Callback1, ctx: &InlineCtx) {
-    let arg = unsafe { std::mem::transmute(*ctx.registers[1].x.as_ref()) };
+    let arg = unsafe { std::mem::transmute(ctx.registers[1].x()) };
     callback(fighter, arg);
 }
 
 #[inline(always)]
 fn call_callback2(fighter: &mut L2CFighterBase, callback: Callback2, ctx: &InlineCtx) {
-    let arg = unsafe { std::mem::transmute(*ctx.registers[2].x.as_ref()) };
-    let arg2 = unsafe { std::mem::transmute(*ctx.registers[3].x.as_ref()) };
+    let arg = unsafe { std::mem::transmute(ctx.registers[2].x()) };
+    let arg2 = unsafe { std::mem::transmute(ctx.registers[3].x()) };
     callback(fighter, arg, arg2);
 }
 
@@ -109,7 +109,7 @@ macro_rules! decl_functions {
         $(
             extern "C" fn $name(ctx: &InlineCtx) {
                 let fighter: &'static mut L2CFighterBase =
-                    unsafe { std::mem::transmute(*ctx.registers[$reg].x.as_ref()) };
+                    unsafe { std::mem::transmute(ctx.registers[$reg].x()) };
                     
                 let fighter = std::hint::black_box(fighter);
 

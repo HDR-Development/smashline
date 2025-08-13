@@ -312,9 +312,9 @@ unsafe fn fighter_create_param_object(arg: u64, kind: i32, fpi: &i32) -> bool {
 
 #[skyline::hook(offset = 0x37209b4, inline)]
 unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
-    let func: extern "C" fn(u64, u64) = std::mem::transmute(*ctx.registers[8].x.as_ref());
+    let func: extern "C" fn(u64, u64) = std::mem::transmute(ctx.registers[8].x());
 
-    func(*ctx.registers[0].x.as_ref(), *ctx.registers[1].x.as_ref());
+    func(ctx.registers[0].x(), ctx.registers[1].x());
 
     let fighter_id = CREATED_FIGHTER.load(Ordering::Relaxed);
 
@@ -334,7 +334,7 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
         return;
     };
 
-    let param_holder = *ctx.registers[0].x.as_ref() as *mut FighterParamHolder;
+    let param_holder = ctx.registers[0].x() as *mut FighterParamHolder;
 
     let original_clone = (*param_holder)
         .vtable_accessor()
@@ -350,7 +350,7 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
         .vtable_accessor_mut()
         .set_get_param_object(get_param_reimpl);
 
-    let prc_stream = *((*ctx.registers[1].x.as_ref() + 0x18) as *const *const u8);
+    let prc_stream = *((ctx.registers[1].x() + 0x18) as *const *const u8);
     let prc_data = prc::read_stream(&mut std::io::Cursor::new(std::slice::from_raw_parts(
         prc_stream,
         u32::MAX as usize,

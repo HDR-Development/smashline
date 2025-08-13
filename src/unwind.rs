@@ -117,14 +117,14 @@ static mut BAD_INFO_CHECK: u64 = 0;
 pub fn prevent_bad_info_check(ctx: &mut InlineCtx) {
     extern "C" fn stub() {}
 
-    let ip = unsafe { get_ip(*ctx.registers[0].x.as_ref() as *const u64) };
+    let ip = unsafe { get_ip(ctx.registers[0].x() as *const u64) };
 
     if MEMORY_REGIONS
         .read()
         .contains_key(&MemoryRegionSearchKey::Key(ip))
     {
         unsafe {
-            *ctx.registers[8].x.as_mut() = stub as *const () as u64;
+            ctx.registers[8].set_x(stub as *const () as u64);
         }
     }
 }

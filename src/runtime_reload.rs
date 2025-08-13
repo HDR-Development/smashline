@@ -228,7 +228,7 @@ unsafe fn process_inputs_hook(ctx: &skyline::hooks::InlineCtx) {
         return;
     }
 
-    let buttons = *ctx.registers[1].x.as_ref() as u32;
+    let buttons = ctx.registers[1].x() as u32;
     if buttons & INPUT == INPUT {
         match LAST_RUN_INSTANT.as_mut() {
             Some(instant) if instant.elapsed().as_secs_f32() >= 5.0 => {

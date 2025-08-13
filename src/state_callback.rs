@@ -66,20 +66,20 @@ unsafe fn lua_module_end(lua_module: *const u64) {
 
 #[skyline::hook(offset = 0x48abac, inline)]
 unsafe fn lua_module_initialize_lua2cpp(ctx: &InlineCtx) {
-    let agent = std::mem::transmute(*ctx.registers[0].x.as_ref());
+    let agent = std::mem::transmute(ctx.registers[0].x());
     call_state_callback(agent, ObjectEvent::Initialize);
 }
 
 #[skyline::hook(offset = 0x48ac44, inline)]
 unsafe fn lua_module_finalize_lua2cpp(ctx: &InlineCtx) {
-    let agent = std::mem::transmute(*ctx.registers[0].x.as_ref());
+    let agent = std::mem::transmute(ctx.registers[0].x());
     call_state_callback(agent, ObjectEvent::Finalize);
 }
 
 #[skyline::hook(offset = 0x3afde0, inline)]
 unsafe fn start_module_accessor_end(ctx: &mut InlineCtx) {
     if CAN_RUN_ON_START {
-        let boma = *ctx.registers[19].x.as_mut();
+        let boma = ctx.registers[19].x();
         let lua_module = *(boma as *mut u64).add(0x190 / 8);
         let agent = std::mem::transmute(*((lua_module + 0x1D8) as *mut *mut L2CFighterBase));
         call_state_callback(agent, ObjectEvent::Start);

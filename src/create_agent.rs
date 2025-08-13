@@ -1184,8 +1184,7 @@ pub(crate) fn agent_hash(fighter: &L2CFighterBase) -> Hash40 {
 
 #[skyline::hook(offset = 0x33b65b0, inline)]
 unsafe fn enable_lua_module(ctx: &mut InlineCtx) {
-    *ctx.registers[8].x.as_mut() =
-        skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + 0x33b8e40;
+    ctx.registers[8].set_x(skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64 + 0x33b8e40);
 }
 
 pub fn install_status_create_agent_hooks() {

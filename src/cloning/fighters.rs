@@ -45,16 +45,16 @@ fn lookup_fighter_kind_from_ui_hash(database: u64, hash: u64) -> i32;
 
 #[skyline::hook(offset = 0x2310d04, inline)]
 unsafe fn set_current_player_id(ctx: &mut InlineCtx) {
-    CURRENT_PLAYER_ID.store(*ctx.registers[21].x.as_ref() as usize, Ordering::Relaxed);
+    CURRENT_PLAYER_ID.store(ctx.registers[21].x() as usize, Ordering::Relaxed);
 
     let result = lookup_fighter_kind_from_ui_hash(
-        *ctx.registers[0].x.as_ref(),
-        *ctx.registers[1].x.as_ref(),
+        ctx.registers[0].x(),
+        ctx.registers[1].x(),
     );
 
     CURRENT_PLAYER_ID.store(usize::MAX, Ordering::Relaxed);
 
-    *ctx.registers[0].x.as_mut() = result as u64;
+    ctx.registers[0].set_x(result as u64);
 }
 
 #[skyline::hook(offset = 0x66cd40)]
@@ -93,7 +93,7 @@ unsafe fn update_selected_fighter(arg: u64, id: u32, info: *const u32) {
 
 #[skyline::hook(offset = 0x64f8a4, inline)]
 unsafe fn initialize_ai(ctx: &InlineCtx) {
-    let fighter = *ctx.registers[21].x.as_ref() as *const i32;
+    let fighter = ctx.registers[21].x() as *const i32;
     let _kind = *fighter.add(0x74 / 4);
     let entry_id = *fighter.add(0x2);
     CURRENT_PLAYER_ID.store(entry_id as usize, Ordering::Relaxed);
@@ -136,7 +136,7 @@ unsafe fn handle_fighter_name(ctx: &mut InlineCtx, dst: usize) {
 
     for new_fighter in NEW_FIGHTERS.read().iter() {
         if new_fighter.hash == clone {
-            *ctx.registers[dst].x.as_mut() = new_fighter.name_ffi.as_ptr() as u64;
+            ctx.registers[dst].set_x(new_fighter.name_ffi.as_ptr() as u64);
         }
     }
 }
