@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ActionError"],"struct":["ActionRegistry","DynamicAction","RegisteredAction"],"trait":["Action"]};

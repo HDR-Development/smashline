@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["vtable"],"enum":["CustomDataAccessError"],"fn":["vtable_custom_data","vtable_custom_data_mut","vtable_mutation_guard","vtable_read_guard","vtable_restore_vtable"],"trait":["VTableAccessor","VirtualClass"]};

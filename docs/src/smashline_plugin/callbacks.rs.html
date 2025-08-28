@@ -1,0 +1,194 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/callbacks.rs`."><title>callbacks.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-7dc20aaa.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="smashline_plugin" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.0-nightly (cdb45c87e 2025-08-27)" data-channel="nightly" data-search-js="search-5fc2c5c0.js" data-stringdex-js="stringdex-0e748618.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-17c00ba7.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/nnfx-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("pre code").forEach(function (node) {
+            if (node.parentNode.className.match(/lua/)) {
+                hljs.highlightElement(node.parentNode);
+            }
+        });
+    });
+</script>
+</head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">smashline_plugin/</div>callbacks.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>locks::RwLock;
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>skyline::hooks::InlineCtx;
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>smash::lib::L2CValue;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>smashline::{Costume, Hash40, L2CFighterBase, StatusLine, Variadic};
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">pub type </span>Callback = <span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">&amp;mut </span>L2CFighterBase);
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">pub type </span>Callback1 = <span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">&amp;mut </span>L2CFighterBase, <span class="kw-2">&amp;mut </span>L2CValue);
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">pub type </span>Callback2 = <span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">&amp;mut </span>L2CFighterBase, <span class="kw-2">&amp;mut </span>L2CValue, <span class="kw-2">&amp;mut </span>L2CValue);
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a><span class="attr">#[derive(Copy, Clone)]
+<a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">pub enum </span>StatusCallbackFunction {
+<a href=#12 id=12 data-nosnippet>12</a>    Pre(Callback),
+<a href=#13 id=13 data-nosnippet>13</a>    Main(Callback),
+<a href=#14 id=14 data-nosnippet>14</a>    End(Callback),
+<a href=#15 id=15 data-nosnippet>15</a>    Init(Callback),
+<a href=#16 id=16 data-nosnippet>16</a>    Exec(Callback),
+<a href=#17 id=17 data-nosnippet>17</a>    ExecStop(Callback),
+<a href=#18 id=18 data-nosnippet>18</a>    Post(Callback),
+<a href=#19 id=19 data-nosnippet>19</a>    Exit(Callback),
+<a href=#20 id=20 data-nosnippet>20</a>    MapCorrection(Callback),
+<a href=#21 id=21 data-nosnippet>21</a>    FixCamera(Callback),
+<a href=#22 id=22 data-nosnippet>22</a>    FixPosSlow(Callback),
+<a href=#23 id=23 data-nosnippet>23</a>    CheckDamage(Callback1),
+<a href=#24 id=24 data-nosnippet>24</a>    CheckAttack(Callback2),
+<a href=#25 id=25 data-nosnippet>25</a>    OnChangeLr(Callback2),
+<a href=#26 id=26 data-nosnippet>26</a>    LeaveStop(Callback2),
+<a href=#27 id=27 data-nosnippet>27</a>    NotifyEventGimmick(Callback1),
+<a href=#28 id=28 data-nosnippet>28</a>    CalcParam(Callback),
+<a href=#29 id=29 data-nosnippet>29</a>}
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">impl </span>StatusCallbackFunction {
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">pub fn </span>as_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#33 id=33 data-nosnippet>33</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#34 id=34 data-nosnippet>34</a>            <span class="self">Self</span>::Pre(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#35 id=35 data-nosnippet>35</a>            <span class="self">Self</span>::Main(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#36 id=36 data-nosnippet>36</a>            <span class="self">Self</span>::End(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#37 id=37 data-nosnippet>37</a>            <span class="self">Self</span>::Init(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#38 id=38 data-nosnippet>38</a>            <span class="self">Self</span>::Exec(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#39 id=39 data-nosnippet>39</a>            <span class="self">Self</span>::ExecStop(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#40 id=40 data-nosnippet>40</a>            <span class="self">Self</span>::Post(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#41 id=41 data-nosnippet>41</a>            <span class="self">Self</span>::Exit(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#42 id=42 data-nosnippet>42</a>            <span class="self">Self</span>::MapCorrection(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#43 id=43 data-nosnippet>43</a>            <span class="self">Self</span>::FixCamera(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#44 id=44 data-nosnippet>44</a>            <span class="self">Self</span>::FixPosSlow(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#45 id=45 data-nosnippet>45</a>            <span class="self">Self</span>::CheckDamage(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#46 id=46 data-nosnippet>46</a>            <span class="self">Self</span>::CheckAttack(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#47 id=47 data-nosnippet>47</a>            <span class="self">Self</span>::OnChangeLr(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#48 id=48 data-nosnippet>48</a>            <span class="self">Self</span>::LeaveStop(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#49 id=49 data-nosnippet>49</a>            <span class="self">Self</span>::NotifyEventGimmick(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#50 id=50 data-nosnippet>50</a>            <span class="self">Self</span>::CalcParam(func) =&gt; <span class="kw-2">*</span>func <span class="kw">as </span><span class="kw-2">*const </span>() <span class="kw">as </span>usize,
+<a href=#51 id=51 data-nosnippet>51</a>        }
+<a href=#52 id=52 data-nosnippet>52</a>    }
+<a href=#53 id=53 data-nosnippet>53</a>
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">pub fn </span>new(line: StatusLine, function: <span class="kw-2">*const </span>()) -&gt; <span class="self">Self </span>{
+<a href=#55 id=55 data-nosnippet>55</a>        <span class="kw">use </span>StatusLine::<span class="kw-2">*</span>;
+<a href=#56 id=56 data-nosnippet>56</a>        <span class="kw">match </span>line {
+<a href=#57 id=57 data-nosnippet>57</a>            Pre =&gt; <span class="self">Self</span>::Pre(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#58 id=58 data-nosnippet>58</a>            Main =&gt; <span class="self">Self</span>::Main(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#59 id=59 data-nosnippet>59</a>            End =&gt; <span class="self">Self</span>::End(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#60 id=60 data-nosnippet>60</a>            Init =&gt; <span class="self">Self</span>::Init(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#61 id=61 data-nosnippet>61</a>            Exec =&gt; <span class="self">Self</span>::Exec(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#62 id=62 data-nosnippet>62</a>            ExecStop =&gt; <span class="self">Self</span>::ExecStop(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#63 id=63 data-nosnippet>63</a>            Post =&gt; <span class="self">Self</span>::Post(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#64 id=64 data-nosnippet>64</a>            Exit =&gt; <span class="self">Self</span>::Exit(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#65 id=65 data-nosnippet>65</a>            MapCorrection =&gt; <span class="self">Self</span>::MapCorrection(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#66 id=66 data-nosnippet>66</a>            FixCamera =&gt; <span class="self">Self</span>::FixCamera(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#67 id=67 data-nosnippet>67</a>            FixPosSlow =&gt; <span class="self">Self</span>::FixPosSlow(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#68 id=68 data-nosnippet>68</a>            CheckDamage =&gt; <span class="self">Self</span>::CheckDamage(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#69 id=69 data-nosnippet>69</a>            CheckAttack =&gt; <span class="self">Self</span>::CheckAttack(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#70 id=70 data-nosnippet>70</a>            OnChangeLr =&gt; <span class="self">Self</span>::OnChangeLr(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#71 id=71 data-nosnippet>71</a>            LeaveStop =&gt; <span class="self">Self</span>::LeaveStop(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#72 id=72 data-nosnippet>72</a>            NotifyEventGimmick =&gt; {
+<a href=#73 id=73 data-nosnippet>73</a>                <span class="self">Self</span>::NotifyEventGimmick(<span class="kw">unsafe </span>{ std::mem::transmute(function) })
+<a href=#74 id=74 data-nosnippet>74</a>            }
+<a href=#75 id=75 data-nosnippet>75</a>            CalcParam =&gt; <span class="self">Self</span>::CalcParam(<span class="kw">unsafe </span>{ std::mem::transmute(function) }),
+<a href=#76 id=76 data-nosnippet>76</a>            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+<a href=#77 id=77 data-nosnippet>77</a>        }
+<a href=#78 id=78 data-nosnippet>78</a>    }
+<a href=#79 id=79 data-nosnippet>79</a>}
+<a href=#80 id=80 data-nosnippet>80</a>
+<a href=#81 id=81 data-nosnippet>81</a><span class="kw">pub struct </span>StatusCallback {
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">pub </span>hash: <span class="prelude-ty">Option</span>&lt;Hash40&gt;,
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">pub </span>function: StatusCallbackFunction,
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">pub </span>costume: Costume,
+<a href=#85 id=85 data-nosnippet>85</a>}
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a><span class="kw">pub static </span>CALLBACKS: RwLock&lt;Vec&lt;StatusCallback&gt;&gt; = RwLock::new(Vec::new());
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a><span class="attr">#[inline(always)]
+<a href=#90 id=90 data-nosnippet>90</a></span><span class="kw">fn </span>call_callback(fighter: <span class="kw-2">&amp;mut </span>L2CFighterBase, callback: Callback, _ctx: <span class="kw-2">&amp;</span>InlineCtx) {
+<a href=#91 id=91 data-nosnippet>91</a>    callback(fighter);
+<a href=#92 id=92 data-nosnippet>92</a>}
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a><span class="attr">#[inline(always)]
+<a href=#95 id=95 data-nosnippet>95</a></span><span class="kw">fn </span>call_callback1(fighter: <span class="kw-2">&amp;mut </span>L2CFighterBase, callback: Callback1, ctx: <span class="kw-2">&amp;</span>InlineCtx) {
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">let </span>arg = <span class="kw">unsafe </span>{ std::mem::transmute(ctx.registers[<span class="number">1</span>].x()) };
+<a href=#97 id=97 data-nosnippet>97</a>    callback(fighter, arg);
+<a href=#98 id=98 data-nosnippet>98</a>}
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a><span class="attr">#[inline(always)]
+<a href=#101 id=101 data-nosnippet>101</a></span><span class="kw">fn </span>call_callback2(fighter: <span class="kw-2">&amp;mut </span>L2CFighterBase, callback: Callback2, ctx: <span class="kw-2">&amp;</span>InlineCtx) {
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">let </span>arg = <span class="kw">unsafe </span>{ std::mem::transmute(ctx.registers[<span class="number">2</span>].x()) };
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="kw">let </span>arg2 = <span class="kw">unsafe </span>{ std::mem::transmute(ctx.registers[<span class="number">3</span>].x()) };
+<a href=#104 id=104 data-nosnippet>104</a>    callback(fighter, arg, arg2);
+<a href=#105 id=105 data-nosnippet>105</a>}
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a><span class="macro">macro_rules!</span> decl_functions {
+<a href=#108 id=108 data-nosnippet>108</a>    ($(<span class="macro-nonterminal">$name</span>:ident(<span class="macro-nonterminal">$line</span>:ident, <span class="macro-nonterminal">$offset</span>:expr, <span class="macro-nonterminal">$code_cave</span>:expr, <span class="macro-nonterminal">$reg</span>:expr) =&gt; <span class="macro-nonterminal">$call_fn</span>:ident);<span class="kw-2">*</span>) =&gt; {
+<a href=#109 id=109 data-nosnippet>109</a>        $(
+<a href=#110 id=110 data-nosnippet>110</a>            <span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn </span><span class="macro-nonterminal">$name</span>(ctx: <span class="kw-2">&amp;</span>InlineCtx) {
+<a href=#111 id=111 data-nosnippet>111</a>                <span class="kw">let </span>fighter: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw-2">mut </span>L2CFighterBase =
+<a href=#112 id=112 data-nosnippet>112</a>                    <span class="kw">unsafe </span>{ std::mem::transmute(ctx.registers[<span class="macro-nonterminal">$reg</span>].x()) };
+<a href=#113 id=113 data-nosnippet>113</a>                    
+<a href=#114 id=114 data-nosnippet>114</a>                <span class="kw">let </span>fighter = std::hint::black_box(fighter);
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a>                <span class="kw">let </span>callbacks = <span class="kw">crate</span>::create_agent::status_callbacks(fighter);
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a>                <span class="kw">for </span>callback <span class="kw">in </span>callbacks.iter() {
+<a href=#119 id=119 data-nosnippet>119</a>                    <span class="kw">if let </span>StatusCallbackFunction::<span class="macro-nonterminal">$line</span>(callback_fn) = <span class="kw-2">*</span>callback {
+<a href=#120 id=120 data-nosnippet>120</a>                       <span class="macro-nonterminal">$call_fn</span>(fighter, callback_fn, ctx);
+<a href=#121 id=121 data-nosnippet>121</a>                    }
+<a href=#122 id=122 data-nosnippet>122</a>                }
+<a href=#123 id=123 data-nosnippet>123</a>            }
+<a href=#124 id=124 data-nosnippet>124</a>        )*
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">pub fn </span>install_callback_hooks() {
+<a href=#127 id=127 data-nosnippet>127</a>            $(
+<a href=#128 id=128 data-nosnippet>128</a>                <span class="kw">crate</span>::nro_hook::add_hook(<span class="macro-nonterminal">$offset</span>, <span class="macro-nonterminal">$code_cave</span>, <span class="macro-nonterminal">$name</span>);
+<a href=#129 id=129 data-nosnippet>129</a>            )*
+<a href=#130 id=130 data-nosnippet>130</a>            <span class="kw">unsafe </span>{
+<a href=#131 id=131 data-nosnippet>131</a>                <span class="kw">crate</span>::nro_hook::add_normal_hook(<span class="number">0x3250</span>, <span class="kw-2">&amp;mut </span>ORIGINAL, call_line_status_hook <span class="kw">as </span><span class="kw-2">*const </span>());
+<a href=#132 id=132 data-nosnippet>132</a>            }
+<a href=#133 id=133 data-nosnippet>133</a>        }
+<a href=#134 id=134 data-nosnippet>134</a>    }
+<a href=#135 id=135 data-nosnippet>135</a>}
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a><span class="macro">decl_functions!</span> {
+<a href=#138 id=138 data-nosnippet>138</a>    call_init_hook(Init, <span class="number">0x1bb4</span>, <span class="number">0x1a100</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#139 id=139 data-nosnippet>139</a>    call_pre_hook(Pre, <span class="number">0x2560</span>, <span class="number">0x16086c</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#140 id=140 data-nosnippet>140</a>    call_post_hook(Post, <span class="number">0x31d4</span>, <span class="number">0x160884</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#141 id=141 data-nosnippet>141</a>    call_post_hook2(Post, <span class="number">0x321c</span>, <span class="number">0x1608a0</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#142 id=142 data-nosnippet>142</a>    <span class="comment">// call_main_hook(Main, 0x32a4, 0x1608bc, 0) =&gt; call_callback;
+<a href=#143 id=143 data-nosnippet>143</a>    // call_main_hook2(Main, 0x32ec, 0x1608d4, 0) =&gt; call_callback;
+<a href=#144 id=144 data-nosnippet>144</a>    </span>call_fix_camera_hook(FixCamera, <span class="number">0x35e4</span>, <span class="number">0x1608ec</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#145 id=145 data-nosnippet>145</a>    call_fix_camera_hook2(FixCamera, <span class="number">0x362c</span>, <span class="number">0x160904</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#146 id=146 data-nosnippet>146</a>    cal_map_correction_hook(MapCorrection, <span class="number">0x36b4</span>, <span class="number">0x211afc</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#147 id=147 data-nosnippet>147</a>    cal_map_correction_hook2(MapCorrection, <span class="number">0x36fc</span>, <span class="number">0x211b14</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#148 id=148 data-nosnippet>148</a>    call_fix_pos_slow_hook(FixPosSlow, <span class="number">0x3784</span>, <span class="number">0x211b2c</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#149 id=149 data-nosnippet>149</a>    call_fix_pos_slow_hook2(FixPosSlow, <span class="number">0x37cc</span>, <span class="number">0x211b44</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#150 id=150 data-nosnippet>150</a>    call_end_hook(End, <span class="number">0x689c</span>, <span class="number">0x211b5c</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#151 id=151 data-nosnippet>151</a>    call_exit_hook(Exit, <span class="number">0x6950</span>, <span class="number">0x211b74</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#152 id=152 data-nosnippet>152</a>    call_exec_stop_hook(ExecStop, <span class="number">0x70e8</span>, <span class="number">0x211b90</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#153 id=153 data-nosnippet>153</a>    call_exec_hook(Exec, <span class="number">0x7134</span>, <span class="number">0x211ba8</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#154 id=154 data-nosnippet>154</a>    call_exec_stop_hook2(ExecStop, <span class="number">0x1a020</span>, <span class="number">0x2118c4</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#155 id=155 data-nosnippet>155</a>    call_exec_hook2(Exec, <span class="number">0x1a06c</span>, <span class="number">0x2118dc</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#156 id=156 data-nosnippet>156</a>    call_calc_param_hook(CalcParam, <span class="number">0x1a2a8</span>, <span class="number">0x2118f4</span>, <span class="number">0</span>) =&gt; call_callback;
+<a href=#157 id=157 data-nosnippet>157</a>    call_notify_event_gimmick_hook(NotifyEventGimmick, <span class="number">0x1a434</span>, <span class="number">0x21190c</span>, <span class="number">0</span>) =&gt; call_callback1;
+<a href=#158 id=158 data-nosnippet>158</a>    call_leave_stop_hook(LeaveStop, <span class="number">0x1a5dc</span>, <span class="number">0x211924</span>, <span class="number">1</span>) =&gt; call_callback2;
+<a href=#159 id=159 data-nosnippet>159</a>    call_on_change_lr_hook(OnChangeLr, <span class="number">0x1a77c</span>, <span class="number">0x1a7b0</span>, <span class="number">1</span>) =&gt; call_callback2;
+<a href=#160 id=160 data-nosnippet>160</a>    call_check_attack_hook(CheckAttack, <span class="number">0x1ab30</span>, <span class="number">0x2aabf0</span>, <span class="number">1</span>) =&gt; call_callback2;
+<a href=#161 id=161 data-nosnippet>161</a>    call_check_damage_hook(CheckDamage, <span class="number">0x1b414</span>, <span class="number">0x2aac08</span>, <span class="number">0</span>) =&gt; call_callback1
+<a href=#162 id=162 data-nosnippet>162</a>}
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a><span class="comment">// main is handled differently so that we can call it after
+<a href=#165 id=165 data-nosnippet>165</a></span><span class="kw">static </span><span class="kw-2">mut </span>ORIGINAL: <span class="kw-2">*const </span>() = std::ptr::null();
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a><span class="kw">unsafe fn </span>call_line_status_hook(
+<a href=#168 id=168 data-nosnippet>168</a>    fighter: <span class="kw-2">&amp;mut </span>L2CFighterBase,
+<a href=#169 id=169 data-nosnippet>169</a>    variadic: <span class="kw-2">&amp;mut </span>Variadic,
+<a href=#170 id=170 data-nosnippet>170</a>    string: <span class="kw-2">*const </span>u8,
+<a href=#171 id=171 data-nosnippet>171</a>    va_list: u32,
+<a href=#172 id=172 data-nosnippet>172</a>) {
+<a href=#173 id=173 data-nosnippet>173</a>    <span class="kw">let </span>callable: <span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">&amp;mut </span>L2CFighterBase, <span class="kw-2">&amp;mut </span>Variadic, <span class="kw-2">*const </span>u8, u32) =
+<a href=#174 id=174 data-nosnippet>174</a>        std::mem::transmute(ORIGINAL);
+<a href=#175 id=175 data-nosnippet>175</a>    callable(fighter, variadic, string, va_list);
+<a href=#176 id=176 data-nosnippet>176</a>
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">let </span>callbacks = <span class="kw">crate</span>::create_agent::status_callbacks(fighter);
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">for </span>callback <span class="kw">in </span>callbacks.iter() {
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">if let </span>StatusCallbackFunction::Main(callback_fn) = <span class="kw-2">*</span>callback {
+<a href=#180 id=180 data-nosnippet>180</a>            callback_fn(fighter);
+<a href=#181 id=181 data-nosnippet>181</a>        }
+<a href=#182 id=182 data-nosnippet>182</a>    }
+<a href=#183 id=183 data-nosnippet>183</a>}</code></pre></div></section></main></body></html>

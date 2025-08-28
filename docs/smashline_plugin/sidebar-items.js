@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["__custom_fini","__custom_init","main"],"mod":["api"],"static":["__MODULE_NAME"]};
