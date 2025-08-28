@@ -330,20 +330,28 @@ decl_hooks_kirby! {
 unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     let kind = CURRENT_KIRBY_COPY.load(Ordering::Relaxed);
     let kirby_copy_whitelist = KIRBY_COPY_ARTICLE_WHITELIST.read();
-    if let Some(whitelist) = kirby_copy_whitelist.get(&kind) {
-        // println!("Fighter {:#x} is in the whitelist!", kind);
-        let original_descriptors = ctx.registers[store_reg].x() as *const StaticArticleData;
-        IS_KIRBY_COPYING.store(true, Ordering::Relaxed);
-        let fighter_data = get_static_fighter_data(kind);
-        CURRENT_KIRBY_COPY.store(-1, Ordering::Relaxed);
-        IS_KIRBY_COPYING.store(false, Ordering::Relaxed);
+    // println!("Fighter {:#x} is in the whitelist!", kind);
+    let original_descriptors = ctx.registers[store_reg].x() as *const StaticArticleData;
+    IS_KIRBY_COPYING.store(true, Ordering::Relaxed);
+    let fighter_data = get_static_fighter_data(kind);
+    CURRENT_KIRBY_COPY.store(-1, Ordering::Relaxed);
+    IS_KIRBY_COPYING.store(false, Ordering::Relaxed);
     
-        let mut new_descriptors = vec![];
-
-        for article in  (*original_descriptors).articles_as_slice().iter() {
-            new_descriptors.push(*article);
+    let mut new_descriptors = vec![];
+    
+    for article in  (*original_descriptors).articles_as_slice().iter() {
+        new_descriptors.push(*article);
+    }
+    
+    for article in new_descriptors.iter_mut() {
+        // println!("checking count for article id {:#x}", article.weapon_id);
+        let weapon_count = WEAPON_COUNT_UPDATE.read();
+        if let Some(new_count) = weapon_count.get(&article.weapon_id) {
+            article.max_count = *new_count;
         }
-
+    }
+    
+    if let Some(whitelist) = kirby_copy_whitelist.get(&kind) {
         for article in (*fighter_data).articles_as_slice().iter() {
             if whitelist.contains(&article.weapon_id) {
                 // println!("Whitelist contains article {:#x}", article.weapon_id);
@@ -354,16 +362,16 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
                 }
             }
         }
-    
-        let count = new_descriptors.len();
-        let ptr = new_descriptors.leak().as_ptr();
-        let static_article_info = Box::leak(Box::new(StaticArticleData {
-            descriptors: ptr,
-            count,
-        }));
-    
-        ctx.registers[store_reg].set_x(static_article_info as *const StaticArticleData as u64);
     }
+
+    let count = new_descriptors.len();
+    let ptr = new_descriptors.leak().as_ptr();
+    let static_article_info = Box::leak(Box::new(StaticArticleData {
+        descriptors: ptr,
+        count,
+    }));
+
+    ctx.registers[store_reg].set_x(static_article_info as *const StaticArticleData as u64);
 }
 
 pub fn install() {
