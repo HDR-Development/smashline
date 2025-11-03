@@ -1,11 +1,14 @@
 use std::{
     collections::BTreeMap,
-    sync::atomic::{AtomicBool, AtomicI32, Ordering},
+    sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering},
+    ffi::c_char,
 };
 
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
 use smashline::{skyline_smash::app::BattleObjectModuleAccessor, Hash40};
+
+use crate::dynamic_accessor::DynamicArrayAccessor;
 
 pub struct NewAgent {
     pub old_owner_id: i32,
@@ -26,6 +29,13 @@ pub struct NewArticle {
 pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
 pub static NEW_AGENTS: RwLock<BTreeMap<i32, Vec<NewAgent>>> = RwLock::new(BTreeMap::new());
 pub static IGNORE_NEW_AGENTS: AtomicBool = AtomicBool::new(false);
+
+const ORIGINAL_ARTICLE_COUNT: usize = 0x267;
+pub static ARTICLE_COUNT: AtomicUsize = AtomicUsize::new(ORIGINAL_ARTICLE_COUNT);
+
+pub static WEAPON_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5185bd0, ORIGINAL_ARTICLE_COUNT));
+pub static WEAPON_OWNER_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5188240, ORIGINAL_ARTICLE_COUNT));
+pub static WEAPON_OWNER_KINDS: RwLock<DynamicArrayAccessor<i32>> = RwLock::new(DynamicArrayAccessor::new(0x455d7e4, ORIGINAL_ARTICLE_COUNT));
 
 pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
 
