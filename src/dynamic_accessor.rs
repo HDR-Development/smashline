@@ -48,6 +48,9 @@ impl<T: Clone> DerefMut for DynamicArrayAccessor<T> {
     }
 }
 
+// 2+ weapons with the same name use the same pointer to that string.
+// So, if someone is adding a new weapon with the same name,
+// it'll also use the same pointer that the previous weapons use.
 impl PushArray<*const c_char> for DynamicArrayAccessor<*const c_char> {
     fn push(&mut self, item: *const c_char) {
         let data: &mut Vec<*const c_char> = self;
