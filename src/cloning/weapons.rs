@@ -272,7 +272,7 @@ decl_hooks! {
 
 decl_hooks! {
     install_weapon_name_hooks => weapon_name_hook;
-    get_file_weapon_name(23, 22, 0x17e098c);
+    get_file_weapon_name(23, 22, 0x17e0890);
     normal_param_data(21, 27, 0x33b6830);
     map_collision_param_data(21, 2, 0x33b69f0);
     visibility_param_data(21, 2, 0x33b6d14);
