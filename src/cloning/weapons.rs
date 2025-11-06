@@ -185,27 +185,27 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     Box::leak(new_fighter_data)
 }
 
-fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    let index = ctx.registers[source_register].x();
+fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
+    let index = ctx.registers[source_register].x() >> shift;
     ctx.registers[dst_register].set_x(WEAPON_OWNER_KINDS.read()[index as usize] as u64);
 }
 
-fn weapon_owner_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    let index = ctx.registers[source_register].x();
+fn weapon_owner_name_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
+    let index = ctx.registers[source_register].x() >> shift;
     ctx.registers[dst_register].set_x(WEAPON_OWNER_NAMES.read()[index as usize] as u64);
 }
 
-fn weapon_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    let index = ctx.registers[source_register].x();
+fn weapon_name_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
+    let index = ctx.registers[source_register].x() >> shift;
     ctx.registers[dst_register].set_x(WEAPON_NAMES.read()[index as usize] as u64);
 }
 
 macro_rules! decl_hooks {
-    ($install_fn:ident => $func:expr; $($name:ident($src:expr, $dst:expr, $offset:expr));*) => {
+    ($install_fn:ident => $func:expr; $($name:ident($src:expr, $shift:expr, $dst:expr, $offset:expr));*) => {
         $(
             #[skyline::hook(offset = $offset, inline)]
             unsafe fn $name(ctx: &mut InlineCtx) {
-                $func(ctx, $src, $dst);
+                $func(ctx, $src, $shift, $dst);
             }
         )*
 
@@ -221,32 +221,32 @@ macro_rules! decl_hooks {
 
 decl_hooks! {
     install_weapon_owner_hooks => weapon_owner_hook;
-    params(21, 26, 0x33b6628);
-    game_animcmd_owner(22, 8, 0x33acf78);
-    sound_animcmd_owner(22, 8, 0x33aee38);
-    effect_animcmd_owner(22, 8, 0x33aded8);
-    status_script_owner(22, 8, 0x33ac040)
+    params(21, 0, 26, 0x33b6628);
+    game_animcmd_owner(22, 0, 8, 0x33acf78);
+    sound_animcmd_owner(22, 0, 8, 0x33aee38);
+    effect_animcmd_owner(22, 0, 8, 0x33aded8);
+    status_script_owner(22, 0, 8, 0x33ac040)
 }
 
 decl_hooks! {
     install_weapon_owner_name_hooks => weapon_owner_name_hook;
-    get_file(26, 25, 0x17e0a4c);
-    game_animcmd_owner_name(8, 2, 0x33ace7c);
-    sound_animcmd_owner_name(8, 2, 0x33aed3c);
-    effect_animcmd_owner_name(8, 2, 0x33adddc);
-    status_script_owner_name(8, 2, 0x33abf54)
+    get_file(26, 0, 25, 0x17e0a4c);
+    game_animcmd_owner_name(8, 3, 2, 0x33ace7c);
+    sound_animcmd_owner_name(8, 3, 2, 0x33aed3c);
+    effect_animcmd_owner_name(8, 3, 2, 0x33adddc);
+    status_script_owner_name(8, 3, 2, 0x33abf54)
 }
 
 decl_hooks! {
     install_weapon_name_hooks => weapon_name_hook;
-    get_file_weapon_name(23, 22, 0x17e0890);
-    normal_param_data(21, 27, 0x33b6830);
-    map_collision_param_data(21, 2, 0x33b69f0);
-    visibility_param_data(21, 2, 0x33b6d14);
-    game_animcmd_weapon_name(8, 3, 0x33ace8c);
-    sound_animcmd_weapon_name(8, 3, 0x33aed4c);
-    effect_animcmd_weapon_name(8, 3, 0x33addec);
-    status_script_weapon_name(8, 3, 0x33abf64)
+    get_file_weapon_name(23, 0, 22, 0x17e0890);
+    normal_param_data(21, 0, 27, 0x33b6830);
+    map_collision_param_data(21, 0, 2, 0x33b69f0);
+    visibility_param_data(21, 0, 2, 0x33b6d14);
+    game_animcmd_weapon_name(8, 3, 3, 0x33ace8c);
+    sound_animcmd_weapon_name(8, 3, 3, 0x33aed4c);
+    effect_animcmd_weapon_name(8, 3, 3, 0x33addec);
+    status_script_weapon_name(8, 3, 3, 0x33abf64)
 }
 
 macro_rules! decl_hooks_kirby_get_kind {
