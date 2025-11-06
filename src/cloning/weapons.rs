@@ -186,51 +186,18 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
 }
 
 fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
-        return;
-    };
-
-    unsafe {
-        ctx.registers[dst_register].set_x(agent.owner_id as u64);
-    }
+    let index = ctx.registers[source_register].x();
+    ctx.registers[dst_register].set_x(WEAPON_OWNER_KINDS.read()[index as usize] as u64);
 }
 
 fn weapon_owner_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
-        return;
-    };
-
-    unsafe {
-        ctx.registers[dst_register].set_x(agent.owner_name_ffi.as_ptr() as u64);
-    }
+    let index = ctx.registers[source_register].x();
+    ctx.registers[dst_register].set_x(WEAPON_OWNER_NAMES.read()[index as usize] as u64);
 }
 
 fn weapon_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
-        return;
-    };
-
-    unsafe {
-        ctx.registers[dst_register].set_x(agent.new_name_ffi.as_ptr() as u64);
-    }
+    let index = ctx.registers[source_register].x();
+    ctx.registers[dst_register].set_x(WEAPON_NAMES.read()[index as usize] as u64);
 }
 
 macro_rules! decl_hooks {
