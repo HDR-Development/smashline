@@ -379,6 +379,20 @@ fn get_weapon_bone_stuff(kind: i32) -> *const c_void {
     call_original!(k)
 }
 
+#[skyline::hook(offset = 0x33be790)]
+fn get_weapon_vtable(kind: i32) -> *const c_void {
+    let k;
+
+    if kind < ORIGINAL_ARTICLE_COUNT
+    || kind >= ARTICLE_COUNT.load(Ordering::Relaxed) {
+        kind
+    } else {
+        BASE_WEAPON_KIND.read()[(kind - 0x267) as usize]
+    }
+
+    call_original!(k)
+}
+
 pub fn install() {
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
@@ -388,6 +402,7 @@ pub fn install() {
         get_static_fighter_data,
         get_file_category,
         get_weapon_bone_stuff,
+        get_weapon_vtable,
     );
 
     install_kirby_copy_kind_hooks();
