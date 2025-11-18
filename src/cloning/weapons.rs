@@ -36,6 +36,7 @@ pub static ARTICLE_COUNT: AtomicUsize = AtomicUsize::new(ORIGINAL_ARTICLE_COUNT)
 pub static WEAPON_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5185bd0, ORIGINAL_ARTICLE_COUNT));
 pub static WEAPON_OWNER_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5188240, ORIGINAL_ARTICLE_COUNT));
 pub static WEAPON_OWNER_KINDS: RwLock<DynamicArrayAccessor<i32>> = RwLock::new(DynamicArrayAccessor::new(0x455d7e4, ORIGINAL_ARTICLE_COUNT));
+pub static BASE_WEAPON_KIND: RwLock<Vec<i32>> = RwLock::new(Vec::new());
 
 pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
 
