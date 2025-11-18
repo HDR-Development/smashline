@@ -351,13 +351,27 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     ctx.registers[store_reg].set_x(static_article_info as *const StaticArticleData as u64);
 }
 
+// Just going to assume "fighter" when getting the file
+// There's on;y 1 case where it's "enemy" instead
+#[skyline::hook(offset = 0x17e09a8, inline)]
+unsafe fn get_file_category(ctx: &mut InlineCtx) {
+    if ctx.registers[26].x() >= 0x267 {
+        use skyline::hooks;
+
+        let text = hooks::getRegionAddress(hooks::Region::Text) as *const u8;
+        let fighter_string = text.add(0x4358c60) as *const c_char;
+        ctx.registers[25].set_x(fighter_string as u64);
+    }
+}
+
 pub fn install() {
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
     install_weapon_owner_name_hooks();
 
     skyline::install_hooks!(
-        get_static_fighter_data
+        get_static_fighter_data,
+        get_file_category,
     );
 
     install_kirby_copy_kind_hooks();
