@@ -356,7 +356,7 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
 // There's on;y 1 case where it's "enemy" instead
 #[skyline::hook(offset = 0x17e09a8, inline)]
 unsafe fn get_file_category(ctx: &mut InlineCtx) {
-    if ctx.registers[26].x() >= 0x267 {
+    if ctx.registers[26].x() >= ORIGINAL_ARTICLE_COUNT {
         use skyline::hooks;
 
         let text = hooks::getRegionAddress(hooks::Region::Text) as *const u8;
