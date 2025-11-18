@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering},
-    ffi::c_char,
+    ffi::{c_char, c_void},
 };
 
 use locks::RwLock;
@@ -365,6 +365,20 @@ unsafe fn get_file_category(ctx: &mut InlineCtx) {
     }
 }
 
+#[skyline::hook(offset = 0x33aa1e0)]
+fn get_weapon_bone_stuff(kind: i32) -> *const c_void {
+    let k;
+
+    if kind < ORIGINAL_ARTICLE_COUNT
+    || kind >= ARTICLE_COUNT.load(Ordering::Relaxed) {
+        kind
+    } else {
+        BASE_WEAPON_KIND.read()[(kind - 0x267) as usize]
+    }
+
+    call_original!(k)
+}
+
 pub fn install() {
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
@@ -373,6 +387,7 @@ pub fn install() {
     skyline::install_hooks!(
         get_static_fighter_data,
         get_file_category,
+        get_weapon_bone_stuff,
     );
 
     install_kirby_copy_kind_hooks();
