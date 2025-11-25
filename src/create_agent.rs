@@ -2,7 +2,9 @@ use std::{
     borrow::BorrowMut, collections::{BTreeMap, HashMap}, ops::{Deref, DerefMut}, sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
-    }, time::Duration
+    },
+    time::Duration,
+    ffi::CStr,
 };
 
 use acmd_engine::SmashlineScript;
@@ -23,7 +25,7 @@ use smashline::{
 use vtables::{CustomDataAccessError, VirtualClass};
 
 use crate::{
-    cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
+    cloning::weapons::{IGNORE_NEW_AGENTS, WEAPON_NAMES, WEAPON_OWNER_NAMES}, interpreter::LoadedScript,
     static_accessor::StaticArrayAccessor, callbacks::{CALLBACKS, StatusCallbackFunction}
 };
 
@@ -565,16 +567,6 @@ fn create_agent_hook(
             Some(agent)
         }
         BattleObjectCategory::Weapon => {
-            let Some(name) = crate::utils::get_weapon_name(object.kind) else {
-                // TODO: Warn
-                return original.call(object, boma, lua_state);
-            };
-
-            let Some(owner) = crate::utils::get_weapon_owner_name(object.kind) else {
-                // TODO: Warn
-                return original.call(object, boma, lua_state);
-            };
-
             let (agent, additional_module) = if let Some(agent) =
                 original.call(object, boma, lua_state)
             {
@@ -605,6 +597,9 @@ fn create_agent_hook(
                     (Box::leak(agent.assume_init()), None)
                 }
             };
+
+            let name = unsafe { CStr::from_ptr(WEAPON_NAMES.read()[object.kind as usize]).to_str().unwrap() };
+            let owner = unsafe { CStr::from_ptr(WEAPON_OWNER_NAMES.read()[object.kind as usize]).to_str().unwrap() };
 
             let qualified_name = format!("{owner}_{name}");
 
@@ -1065,14 +1060,6 @@ fn create_agent_status_weapon(
     boma: &mut BattleObjectModuleAccessor,
     lua_state: *mut lua_State,
 ) -> Option<&'static mut L2CFighterBase> {
-    let Some(name) = crate::utils::get_weapon_name(object.kind) else {
-        return call_original!(object, boma, lua_state);
-    };
-
-    let Some(owner_name) = crate::utils::get_weapon_owner_name(object.kind) else {
-        return call_original!(object, boma, lua_state);
-    };
-
     let (is_new, agent, additional_fighter) =
         if let Some(agent) = call_original!(object, boma, lua_state) {
             (false, agent, None)
@@ -1122,6 +1109,9 @@ fn create_agent_status_weapon(
     wrapper
         .vtable_accessor_mut()
         .set_set_status_scripts(set_status_scripts);
+
+    let name = unsafe { CStr::from_ptr(WEAPON_NAMES.read()[object.kind as usize]).to_str().unwrap() };
+    let owner_name = unsafe { CStr::from_ptr(WEAPON_OWNER_NAMES.read()[object.kind as usize]).to_str().unwrap() };
 
     let data = vtables::vtable_custom_data_mut::<_, L2CFighterWrapper>(wrapper.deref_mut());
     data.hash = Hash40::new(&format!("{owner_name}_{name}"));
