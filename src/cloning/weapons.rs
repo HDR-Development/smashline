@@ -373,7 +373,7 @@ fn get_weapon_bone_stuff(kind: i32) -> *const c_void {
     || kind >= ARTICLE_COUNT.load(Ordering::Relaxed) {
         kind
     } else {
-        BASE_WEAPON_KIND.read()[(kind - 0x267) as usize]
+        BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_ARTICLE_COUNT]
     }
 
     call_original!(k)
@@ -387,7 +387,7 @@ fn get_weapon_vtable(kind: i32) -> *const c_void {
     || kind >= ARTICLE_COUNT.load(Ordering::Relaxed) {
         kind
     } else {
-        BASE_WEAPON_KIND.read()[(kind - 0x267) as usize]
+        BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_ARTICLE_COUNT]
     }
 
     call_original!(k)
