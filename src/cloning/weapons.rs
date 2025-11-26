@@ -38,6 +38,8 @@ pub static WEAPON_OWNER_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwL
 pub static WEAPON_OWNER_KINDS: RwLock<DynamicArrayAccessor<i32>> = RwLock::new(DynamicArrayAccessor::new(0x455d7e4, ORIGINAL_WEAPON_COUNT));
 pub static BASE_WEAPON_KIND: RwLock<Vec<i32>> = RwLock::new(Vec::new());
 
+pub static CURRENT_WEAPON_KIND: AtomicI32 = AtomicI32::new(-1);
+
 pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
 
 pub fn try_get_new_agent(
@@ -393,6 +395,24 @@ fn get_weapon_vtable(kind: i32) -> *const c_void {
     call_original!(k)
 }
 
+#[skyline::hook(offset = 0x33b5d10, inline)]
+unsafe fn mimic_echo_weapon(ctx: &mut InlineCtx) {
+    let mut kind = ctx.registers[28].w();
+
+    CURRENT_WEAPON_KIND.store(kind as i32, Ordering::Relaxed);
+
+    if kind >= ORIGINAL_WEAPON_COUNT {
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT] as u32;
+    }
+
+    ctx.registers[28].set_w(kind);
+}
+
+#[skyline::hook(offset = 0x33b6528, inline)]
+unsafe fn restore_weapon_kind(ctx: &mut InlineCtx) {
+    ctx.registers[28].set_w(CURRENT_WEAPON_KIND.load(Ordering::Relaxed) as u32);
+}
+
 pub fn install() {
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
@@ -403,6 +423,8 @@ pub fn install() {
         get_file_category,
         get_weapon_bone_stuff,
         get_weapon_vtable,
+        mimic_echo_weapon,
+        restore_weapon_kind,
     );
 
     install_kirby_copy_kind_hooks();
