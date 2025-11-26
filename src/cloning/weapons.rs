@@ -30,12 +30,12 @@ pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BT
 pub static NEW_AGENTS: RwLock<BTreeMap<i32, Vec<NewAgent>>> = RwLock::new(BTreeMap::new());
 pub static IGNORE_NEW_AGENTS: AtomicBool = AtomicBool::new(false);
 
-const ORIGINAL_ARTICLE_COUNT: usize = 0x267;
-pub static ARTICLE_COUNT: AtomicUsize = AtomicUsize::new(ORIGINAL_ARTICLE_COUNT);
+const ORIGINAL_WEAPON_COUNT: usize = 0x267;
+pub static WEAPON_COUNT: AtomicUsize = AtomicUsize::new(ORIGINAL_WEAPON_COUNT);
 
-pub static WEAPON_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5185bd0, ORIGINAL_ARTICLE_COUNT));
-pub static WEAPON_OWNER_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5188240, ORIGINAL_ARTICLE_COUNT));
-pub static WEAPON_OWNER_KINDS: RwLock<DynamicArrayAccessor<i32>> = RwLock::new(DynamicArrayAccessor::new(0x455d7e4, ORIGINAL_ARTICLE_COUNT));
+pub static WEAPON_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5185bd0, ORIGINAL_WEAPON_COUNT));
+pub static WEAPON_OWNER_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5188240, ORIGINAL_WEAPON_COUNT));
+pub static WEAPON_OWNER_KINDS: RwLock<DynamicArrayAccessor<i32>> = RwLock::new(DynamicArrayAccessor::new(0x455d7e4, ORIGINAL_WEAPON_COUNT));
 pub static BASE_WEAPON_KIND: RwLock<Vec<i32>> = RwLock::new(Vec::new());
 
 pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
@@ -356,7 +356,7 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
 // There's on;y 1 case where it's "enemy" instead
 #[skyline::hook(offset = 0x17e09a8, inline)]
 unsafe fn get_file_category(ctx: &mut InlineCtx) {
-    if ctx.registers[26].x() >= ORIGINAL_ARTICLE_COUNT {
+    if ctx.registers[26].x() >= ORIGINAL_WEAPON_COUNT {
         use skyline::hooks;
 
         let text = hooks::getRegionAddress(hooks::Region::Text) as *const u8;
@@ -369,11 +369,11 @@ unsafe fn get_file_category(ctx: &mut InlineCtx) {
 fn get_weapon_bone_stuff(kind: i32) -> *const c_void {
     let k;
 
-    if kind < ORIGINAL_ARTICLE_COUNT
-    || kind >= ARTICLE_COUNT.load(Ordering::Relaxed) {
+    if kind < ORIGINAL_WEAPON_COUNT
+    || kind >= WEAPON_COUNT.load(Ordering::Relaxed) {
         kind
     } else {
-        BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_ARTICLE_COUNT]
+        BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT]
     }
 
     call_original!(k)
@@ -383,11 +383,11 @@ fn get_weapon_bone_stuff(kind: i32) -> *const c_void {
 fn get_weapon_vtable(kind: i32) -> *const c_void {
     let k;
 
-    if kind < ORIGINAL_ARTICLE_COUNT
-    || kind >= ARTICLE_COUNT.load(Ordering::Relaxed) {
+    if kind < ORIGINAL_WEAPON_COUNT
+    || kind >= WEAPON_COUNT.load(Ordering::Relaxed) {
         kind
     } else {
-        BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_ARTICLE_COUNT]
+        BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT]
     }
 
     call_original!(k)
