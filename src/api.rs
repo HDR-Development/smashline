@@ -361,8 +361,6 @@ pub extern "C" fn smashline_clone_weapon(
         .push(NewAgent {
             old_owner_id: original_owner_id as i32,
             owner_id: new_owner_id as i32,
-            owner_name_ffi: format!("{new_owner}\0"),
-            new_name_ffi: format!("{new_name}\0"),
             owner_name: new_owner,
             new_name,
             old_name: original_name.to_string(),

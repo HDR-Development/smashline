@@ -13,8 +13,6 @@ use crate::dynamic_accessor::DynamicArrayAccessor;
 pub struct NewAgent {
     pub old_owner_id: i32,
     pub owner_id: i32,
-    pub owner_name_ffi: String,
-    pub new_name_ffi: String,
     pub owner_name: String,
     pub new_name: String,
     pub old_name: String,
