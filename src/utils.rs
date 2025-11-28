@@ -34,7 +34,7 @@ pub fn get_weapon_code_dependency(id: i32) -> Option<i32> {
     let current_owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
     let agents = NEW_AGENTS.read();
 
-    try_get_new_agent(&agents, id, current_owner).and_then(|x| x.use_original_code.then_some(x.old_owner_id))
+    try_get_new_agent(&agents, id, current_owner).and_then(|x| x.use_original_code.then_some(x.old_owner_kind))
 }
 
 pub fn get_costume_from_entry_id(entry_id: i32) -> Option<i32> {

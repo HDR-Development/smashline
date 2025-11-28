@@ -11,8 +11,8 @@ use smashline::{skyline_smash::app::BattleObjectModuleAccessor, Hash40};
 use crate::dynamic_accessor::DynamicArrayAccessor;
 
 pub struct NewAgent {
-    pub old_owner_id: i32,
-    pub owner_id: i32,
+    pub old_owner_kind: i32,
+    pub owner_kind: i32,
     pub owner_name: String,
     pub new_name: String,
     pub old_name: String,
@@ -46,7 +46,7 @@ pub fn try_get_new_agent(
     owner: i32,
 ) -> Option<&NewAgent> {
     map.get(&weapon)
-        .and_then(|v| v.iter().find(|a| a.owner_id == owner))
+        .and_then(|v| v.iter().find(|a| a.owner_kind == owner))
 }
 
 pub static CURRENT_OWNER_KIND: AtomicI32 = AtomicI32::new(-1);

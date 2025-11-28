@@ -303,7 +303,7 @@ pub extern "C" fn smashline_reload_script(
 #[no_mangle]
 pub extern "C" fn smashline_clone_weapon(
     original_owner: StringFFI,
-    original_article_id: i32,
+    original_weapon_kind: i32,
     new_owner: StringFFI,
     new_name: StringFFI,
     use_original_code: bool,
@@ -312,7 +312,7 @@ pub extern "C" fn smashline_clone_weapon(
     let new_owner = new_owner.as_str().unwrap().to_string();
     let new_name = new_name.as_str().unwrap().to_string();
 
-    let original_owner_id = LOWERCASE_FIGHTER_NAMES
+    let original_owner_kind = LOWERCASE_FIGHTER_NAMES
         .iter()
         .position(|name| name == original_owner)
         .unwrap();
@@ -322,9 +322,9 @@ pub extern "C" fn smashline_clone_weapon(
     //     .position(|name| name == original_name)
     //     .unwrap();
 
-    let original_name = LOWERCASE_WEAPON_NAMES.get(original_article_id as usize).unwrap();
+    let original_name = LOWERCASE_WEAPON_NAMES.get(original_weapon_kind as usize).unwrap();
 
-    let new_owner_id = LOWERCASE_FIGHTER_NAMES
+    let new_owner_kind = LOWERCASE_FIGHTER_NAMES
         .iter()
         .position(|name| name == new_owner)
         .unwrap();
@@ -333,12 +333,12 @@ pub extern "C" fn smashline_clone_weapon(
 
     let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
     let articles = new_articles
-        .entry(new_owner_id as i32)
+        .entry(new_owner_kind as i32)
         .or_default();
 
     if let Some(id) = articles.iter().position(|article|
-        article.original_owner == original_owner_id as i32 &&
-        article.weapon_id == original_article_id
+        article.original_owner == original_owner_kind as i32 &&
+        article.weapon_id == original_weapon_kind
     ) {
         return id as i32;
     }
@@ -347,7 +347,7 @@ pub extern "C" fn smashline_clone_weapon(
         if let Some(agent) = agents.iter().find(|agent| 
             agent.owner_name == new_owner && agent.new_name == new_name
         ) {
-            let owner = LOWERCASE_FIGHTER_NAMES.get(agent.old_owner_id as usize).unwrap();
+            let owner = LOWERCASE_FIGHTER_NAMES.get(agent.old_owner_kind as usize).unwrap();
             panic!(
                 "Weapon with the name '{}_{}' has already been cloned, but using '{}_{}' instead of '{}_{}'", 
                 new_owner, new_name, owner, agent.old_name, original_owner, original_name
@@ -356,11 +356,11 @@ pub extern "C" fn smashline_clone_weapon(
     }
 
     new_agents
-        .entry(original_article_id as i32)
+        .entry(original_weapon_kind as i32)
         .or_default()
         .push(NewAgent {
-            old_owner_id: original_owner_id as i32,
-            owner_id: new_owner_id as i32,
+            old_owner_kind: original_owner_kind as i32,
+            owner_kind: new_owner_kind as i32,
             owner_name: new_owner,
             new_name,
             old_name: original_name.to_string(),
@@ -369,8 +369,8 @@ pub extern "C" fn smashline_clone_weapon(
 
     let id = articles.len();
     articles.push(NewArticle {
-        original_owner: original_owner_id as i32,
-        weapon_id: original_article_id,
+        original_owner: original_owner_kind as i32,
+        weapon_id: original_weapon_kind,
     });
 
     id as i32
