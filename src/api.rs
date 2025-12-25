@@ -375,8 +375,8 @@ pub extern "C" fn smashline_clone_weapon(
         use_original_code,
     });
 
-    WEAPON_NAMES.write().push(CString::new(new_name).unwrap().into_raw());
-    WEAPON_OWNER_NAMES.write().push(CString::new(new_owner).unwrap().into_raw());
+    WEAPON_NAMES.write().push(CString::new(new_name.clone()).unwrap().into_raw());
+    WEAPON_OWNER_NAMES.write().push(CString::new(new_owner.clone()).unwrap().into_raw());
     WEAPON_OWNER_KINDS.write().push(new_owner_kind as i32);
     WEAPON_KIND_HASHES.write().push(Hash40::new(
         &format!("weapon_kind_{}_{}", new_owner, new_name)

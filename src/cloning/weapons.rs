@@ -385,7 +385,7 @@ macro_rules! decl_hooks_mimic_echo_weapon {
             unsafe fn $name(ctx: &mut InlineCtx) {
                 let kind = ctx.registers[20].w() as i32;
 
-                let hash = if kind > WEAPON_COUNT.load(Ordering::Relaxed) {
+                let hash = if kind > WEAPON_COUNT.load(Ordering::Relaxed) as i32 {
                     Hash40::new("weapon_kind_none").0
                 } else {
                     WEAPON_KIND_HASHES.read()[kind as usize]
@@ -418,17 +418,23 @@ decl_hooks_mimic_echo_weapon! {
     get_hashes2(0x3ae7bc)
 }
 
-// Just going to assume "fighter" when getting the file
-// There's on;y 1 case where it's "enemy" instead
-#[skyline::hook(offset = 0x17e09a8, inline)]
-unsafe fn get_file_category(ctx: &mut InlineCtx) {
-    if ctx.registers[26].x() >= ORIGINAL_WEAPON_COUNT as u64 {
-        use skyline::hooks;
+#[skyline::hook(offset = 0x17e09a4, inline)]
+unsafe fn mimic_echo_weapon_file_category(ctx: &mut InlineCtx) {
+    let mut kind = ctx.registers[26].x() as i32;
 
-        let text = hooks::getRegionAddress(hooks::Region::Text) as *const u8;
-        let fighter_string = text.add(0x4358c60) as *const c_char;
-        ctx.registers[25].set_x(fighter_string as u64);
+    if kind >= ORIGINAL_WEAPON_COUNT as i32 {
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT];
     }
+
+    // Just in case kind is still somehow larger
+    // than the original weapon count, then we're
+    // going to assume "fighter" when getting the file.
+    // There's only 1 case where it's "enemy" instead
+    if kind >= ORIGINAL_WEAPON_COUNT as i32 {
+        kind = 0;
+    }
+
+    ctx.registers[26].set_x(kind as u64);
 }
 
 #[skyline::hook(offset = 0x33b5d10, inline)]
@@ -463,7 +469,7 @@ pub fn install() {
 
     skyline::install_hooks!(
         get_static_fighter_data,
-        get_file_category,
+        mimic_echo_weapon_file_category,
         mimic_echo_weapon,
         restore_weapon_kind,
     );
