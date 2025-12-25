@@ -438,7 +438,7 @@ unsafe fn mimic_echo_weapon_file_category(ctx: &mut InlineCtx) {
 }
 
 #[skyline::hook(offset = 0x33b5d10, inline)]
-unsafe fn mimic_echo_weapon(ctx: &mut InlineCtx) {
+unsafe fn save_weapon_kind(ctx: &mut InlineCtx) {
     let mut kind = ctx.registers[28].w();
 
     CURRENT_WEAPON_KIND.store(kind as i32, Ordering::Relaxed);
@@ -470,7 +470,7 @@ pub fn install() {
     skyline::install_hooks!(
         get_static_fighter_data,
         mimic_echo_weapon_file_category,
-        mimic_echo_weapon,
+        save_weapon_kind,
         restore_weapon_kind,
     );
 
