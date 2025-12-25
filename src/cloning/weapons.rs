@@ -354,6 +354,38 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     ctx.registers[store_reg].set_x(static_article_info as *const StaticArticleData as u64);
 }
 
+macro_rules! decl_hooks_mimic_echo_weapon {
+    ($install_fn:ident; $($name:ident($offset:expr) -> $return_type:ty);*) => {
+        $(
+            #[skyline::hook(offset = $offset)]
+            unsafe fn $name(kind: i32) -> $return_type {
+                let k = if kind < ORIGINAL_WEAPON_COUNT as i32
+                || kind >= WEAPON_COUNT.load(Ordering::Relaxed) as i32 {
+                    kind
+                } else {
+                    BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT]
+                };
+
+                call_original!(k)
+            }
+        )*
+
+        fn $install_fn() {
+            skyline::install_hooks!(
+                $(
+                    $name,
+                )*
+            );
+        }
+    };
+}
+
+decl_hooks_mimic_echo_weapon! {
+    install_mimic_echo_weapon_hooks;
+    get_weapon_bone_stuff(0x33aa1e0) -> *const c_void;
+    get_weapon_vtable(0x33be790) -> *const c_void
+}
+
 // Just going to assume "fighter" when getting the file
 // There's on;y 1 case where it's "enemy" instead
 #[skyline::hook(offset = 0x17e09a8, inline)]
@@ -365,30 +397,6 @@ unsafe fn get_file_category(ctx: &mut InlineCtx) {
         let fighter_string = text.add(0x4358c60) as *const c_char;
         ctx.registers[25].set_x(fighter_string as u64);
     }
-}
-
-#[skyline::hook(offset = 0x33aa1e0)]
-fn get_weapon_bone_stuff(kind: i32) -> *const c_void {
-    let k = if kind < ORIGINAL_WEAPON_COUNT as i32
-    || kind >= WEAPON_COUNT.load(Ordering::Relaxed) as i32 {
-        kind
-    } else {
-        BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT]
-    };
-
-    call_original!(k)
-}
-
-#[skyline::hook(offset = 0x33be790)]
-fn get_weapon_vtable(kind: i32) -> *const c_void {
-    let k = if kind < ORIGINAL_WEAPON_COUNT as i32
-    || kind >= WEAPON_COUNT.load(Ordering::Relaxed) as i32 {
-        kind
-    } else {
-        BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT]
-    };
-
-    call_original!(k)
 }
 
 #[skyline::hook(offset = 0x33b5d10, inline)]
@@ -413,12 +421,11 @@ pub fn install() {
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
     install_weapon_owner_name_hooks();
+    install_mimic_echo_weapon_hooks();
 
     skyline::install_hooks!(
         get_static_fighter_data,
         get_file_category,
-        get_weapon_bone_stuff,
-        get_weapon_vtable,
         mimic_echo_weapon,
         restore_weapon_kind,
     );
