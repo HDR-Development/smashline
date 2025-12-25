@@ -452,6 +452,7 @@ unsafe fn restore_weapon_kind(ctx: &mut InlineCtx) {
 pub fn install() {
     skyline::patching::Patch::in_text(0x3ae23c).nop().unwrap();
     skyline::patching::Patch::in_text(0x3ae7ac).nop().unwrap();
+    skyline::patching::Patch::in_text(0x17e0894).nop().unwrap();
 
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
