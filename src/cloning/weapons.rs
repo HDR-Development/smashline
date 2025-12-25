@@ -36,6 +36,7 @@ pub static WEAPON_COUNT: AtomicUsize = AtomicUsize::new(ORIGINAL_WEAPON_COUNT);
 pub static WEAPON_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5185bd0, ORIGINAL_WEAPON_COUNT));
 pub static WEAPON_OWNER_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5188240, ORIGINAL_WEAPON_COUNT));
 pub static WEAPON_OWNER_KINDS: RwLock<DynamicArrayAccessor<i32>> = RwLock::new(DynamicArrayAccessor::new(0x455d7e4, ORIGINAL_WEAPON_COUNT));
+pub static WEAPON_KIND_HASHES: RwLock<DynamicArrayAccessor<u64>> = RwLock::new(DynamicArrayAccessor::new(0x455e650, ORIGINAL_WEAPON_COUNT));
 pub static BASE_WEAPON_KIND: RwLock<Vec<i32>> = RwLock::new(Vec::new());
 
 pub static CURRENT_WEAPON_KIND: AtomicI32 = AtomicI32::new(-1);
@@ -378,12 +379,43 @@ macro_rules! decl_hooks_mimic_echo_weapon {
             );
         }
     };
+    (hashes; $install_fn:ident; $($name:ident($offset:expr));*) => {
+        $(
+            #[skyline::hook(offset = $offset, inline)]
+            unsafe fn $name(ctx: &mut InlineCtx) {
+                let kind = ctx.registers[20].w() as i32;
+
+                let hash = if kind > WEAPON_COUNT.load(Ordering::Relaxed) {
+                    Hash40::new("weapon_kind_none").0
+                } else {
+                    WEAPON_KIND_HASHES.read()[kind as usize]
+                };
+
+                ctx.registers[4].set_x(hash);
+            }
+        )*
+
+        fn $install_fn() {
+            skyline::install_hooks!(
+                $(
+                    $name,
+                )*
+            );
+        }
+    };
 }
 
 decl_hooks_mimic_echo_weapon! {
     install_mimic_echo_weapon_hooks;
     get_weapon_bone_stuff(0x33aa1e0) -> *const c_void;
     get_weapon_vtable(0x33be790) -> *const c_void
+}
+
+decl_hooks_mimic_echo_weapon! {
+    hashes;
+    install_mimic_echo_weapon_kind_hash_hooks;
+    get_hashes1(0x3ae24c);
+    get_hashes2(0x3ae7bc)
 }
 
 // Just going to assume "fighter" when getting the file
@@ -418,10 +450,15 @@ unsafe fn restore_weapon_kind(ctx: &mut InlineCtx) {
 }
 
 pub fn install() {
+    skyline::patching::Patch::in_text(0x3ae23c).nop().unwrap();
+    skyline::patching::Patch::in_text(0x3ae7ac).nop().unwrap();
+
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
     install_weapon_owner_name_hooks();
+
     install_mimic_echo_weapon_hooks();
+    install_mimic_echo_weapon_kind_hash_hooks();
 
     skyline::install_hooks!(
         get_static_fighter_data,

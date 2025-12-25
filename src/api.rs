@@ -13,7 +13,7 @@ use smashline::{
 
 use crate::{
     callbacks::{StatusCallback, StatusCallbackFunction},
-    cloning::weapons::{NewWeapon, BASE_WEAPON_KIND, WEAPON_COUNT, WEAPON_NAMES, WEAPON_OWNER_KINDS, WEAPON_OWNER_NAMES},
+    cloning::weapons::{NewWeapon, BASE_WEAPON_KIND, WEAPON_COUNT, WEAPON_KIND_HASHES, WEAPON_NAMES, WEAPON_OWNER_KINDS, WEAPON_OWNER_NAMES},
     create_agent::{
         AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
         LOWERCASE_WEAPON_NAMES
@@ -378,6 +378,9 @@ pub extern "C" fn smashline_clone_weapon(
     WEAPON_NAMES.write().push(CString::new(new_name).unwrap().into_raw());
     WEAPON_OWNER_NAMES.write().push(CString::new(new_owner).unwrap().into_raw());
     WEAPON_OWNER_KINDS.write().push(new_owner_kind as i32);
+    WEAPON_KIND_HASHES.write().push(Hash40::new(
+        &format!("weapon_kind_{}_{}", new_owner, new_name)
+    ).0);
     BASE_WEAPON_KIND.write().push(original_owner_kind as i32);
 
     CloneWeaponInfo {
