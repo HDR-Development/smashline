@@ -408,7 +408,8 @@ macro_rules! decl_hooks_mimic_echo_weapon {
 decl_hooks_mimic_echo_weapon! {
     install_mimic_echo_weapon_hooks;
     get_weapon_bone_stuff(0x33aa1e0) -> *const c_void;
-    get_weapon_vtable(0x33be790) -> *const c_void
+    get_weapon_vtable(0x33be790) -> *const c_void;
+    idk(0x33afc00) -> i32
 }
 
 decl_hooks_mimic_echo_weapon! {
