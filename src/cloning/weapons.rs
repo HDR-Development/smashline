@@ -10,22 +10,24 @@ use smashline::{skyline_smash::app::BattleObjectModuleAccessor, Hash40};
 
 use crate::dynamic_accessor::DynamicArrayAccessor;
 
-pub struct NewAgent {
+pub struct NewWeapon {
     pub old_owner_kind: i32,
     pub owner_kind: i32,
     pub owner_name: String,
     pub new_name: String,
     pub old_name: String,
+    pub kind: i32,
+    pub old_kind: i32,
     pub use_original_code: bool,
 }
 
-pub struct NewArticle {
+/* pub struct NewArticle {
     pub original_owner: i32,
     pub weapon_id: i32,
-}
+} */
 
-pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
-pub static NEW_AGENTS: RwLock<BTreeMap<i32, Vec<NewAgent>>> = RwLock::new(BTreeMap::new());
+// pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
+pub static NEW_WEAPONS: RwLock<BTreeMap<i32, Vec<NewWeapon>>> = RwLock::new(BTreeMap::new());
 pub static IGNORE_NEW_AGENTS: AtomicBool = AtomicBool::new(false);
 
 const ORIGINAL_WEAPON_COUNT: usize = 0x267;
@@ -41,10 +43,10 @@ pub static CURRENT_WEAPON_KIND: AtomicI32 = AtomicI32::new(-1);
 pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
 
 pub fn try_get_new_agent(
-    map: &BTreeMap<i32, Vec<NewAgent>>,
+    map: &BTreeMap<i32, Vec<NewWeapon>>,
     weapon: i32,
     owner: i32,
-) -> Option<&NewAgent> {
+) -> Option<&NewWeapon> {
     map.get(&weapon)
         .and_then(|v| v.iter().find(|a| a.owner_kind == owner))
 }
@@ -159,13 +161,13 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
         }
     }
 
-    if let Some(new_articles) = NEW_ARTICLES.read().get(&kind) {
+    if let Some(new_articles) = NEW_WEAPONS.read().get(&kind) {
 
         for article in new_articles.iter() {
-            let source_data = call_original!(article.original_owner);
+            let source_data = call_original!(article.old_owner_kind);
 
             unsafe {
-                let Some(article) = (*source_data).get_article(article.weapon_id) else {
+                let Some(article) = (*source_data).get_article(article.old_kind) else {
                     panic!("Failed to append article table");
                 };
 
@@ -356,7 +358,7 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
 // There's on;y 1 case where it's "enemy" instead
 #[skyline::hook(offset = 0x17e09a8, inline)]
 unsafe fn get_file_category(ctx: &mut InlineCtx) {
-    if ctx.registers[26].x() >= ORIGINAL_WEAPON_COUNT {
+    if ctx.registers[26].x() >= ORIGINAL_WEAPON_COUNT as u64 {
         use skyline::hooks;
 
         let text = hooks::getRegionAddress(hooks::Region::Text) as *const u8;
@@ -367,28 +369,24 @@ unsafe fn get_file_category(ctx: &mut InlineCtx) {
 
 #[skyline::hook(offset = 0x33aa1e0)]
 fn get_weapon_bone_stuff(kind: i32) -> *const c_void {
-    let k;
-
-    if kind < ORIGINAL_WEAPON_COUNT
-    || kind >= WEAPON_COUNT.load(Ordering::Relaxed) {
+    let k = if kind < ORIGINAL_WEAPON_COUNT as i32
+    || kind >= WEAPON_COUNT.load(Ordering::Relaxed) as i32 {
         kind
     } else {
         BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT]
-    }
+    };
 
     call_original!(k)
 }
 
 #[skyline::hook(offset = 0x33be790)]
 fn get_weapon_vtable(kind: i32) -> *const c_void {
-    let k;
-
-    if kind < ORIGINAL_WEAPON_COUNT
-    || kind >= WEAPON_COUNT.load(Ordering::Relaxed) {
+    let k = if kind < ORIGINAL_WEAPON_COUNT as i32
+    || kind >= WEAPON_COUNT.load(Ordering::Relaxed) as i32 {
         kind
     } else {
         BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT]
-    }
+    };
 
     call_original!(k)
 }
@@ -399,7 +397,7 @@ unsafe fn mimic_echo_weapon(ctx: &mut InlineCtx) {
 
     CURRENT_WEAPON_KIND.store(kind as i32, Ordering::Relaxed);
 
-    if kind >= ORIGINAL_WEAPON_COUNT {
+    if kind >= ORIGINAL_WEAPON_COUNT as u32 {
         kind = BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT] as u32;
     }
 

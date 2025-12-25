@@ -1,17 +1,19 @@
 use std::{
+    ffi::CString,
     num::{NonZeroU64, NonZeroUsize},
     ptr::NonNull,
+    sync::atomic::Ordering,
 };
 
 use acmd_engine::action::ActionRegistry;
 use rtld::Section;
 use smashline::{
-    Acmd, AcmdFunction, AgentEntry, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
+    Acmd, AcmdFunction, AgentEntry, CloneWeaponInfo, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
 };
 
 use crate::{
     callbacks::{StatusCallback, StatusCallbackFunction},
-    cloning::weapons::{NewAgent, NewArticle},
+    cloning::weapons::{NewWeapon, BASE_WEAPON_KIND, WEAPON_COUNT, WEAPON_NAMES, WEAPON_OWNER_KINDS, WEAPON_OWNER_NAMES},
     create_agent::{
         AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
         LOWERCASE_WEAPON_NAMES
@@ -307,7 +309,7 @@ pub extern "C" fn smashline_clone_weapon(
     new_owner: StringFFI,
     new_name: StringFFI,
     use_original_code: bool,
-) -> i32 {
+) -> CloneWeaponInfo {
     let original_owner = original_owner.as_str().unwrap().to_string();
     let new_owner = new_owner.as_str().unwrap().to_string();
     let new_name = new_name.as_str().unwrap().to_string();
@@ -329,14 +331,14 @@ pub extern "C" fn smashline_clone_weapon(
         .position(|name| name == new_owner)
         .unwrap();
 
-    let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
+    let mut new_weapons = crate::cloning::weapons::NEW_WEAPONS.write();
 
-    let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
+    /* let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
     let articles = new_articles
         .entry(new_owner_kind as i32)
-        .or_default();
+        .or_default(); */
 
-    if let Some(id) = articles.iter().position(|article|
+    /* if let Some(id) = articles.iter().position(|article|
         article.original_owner == original_owner_kind as i32 &&
         article.weapon_id == original_weapon_kind
     ) {
@@ -353,27 +355,35 @@ pub extern "C" fn smashline_clone_weapon(
                 new_owner, new_name, owner, agent.old_name, original_owner, original_name
             );
         }
-    }
+    } */
 
-    new_agents
-        .entry(original_weapon_kind as i32)
-        .or_default()
-        .push(NewAgent {
-            old_owner_kind: original_owner_kind as i32,
-            owner_kind: new_owner_kind as i32,
-            owner_name: new_owner,
-            new_name,
-            old_name: original_name.to_string(),
-            use_original_code,
-        });
+    let weapons = new_weapons
+        .entry(new_owner_kind as i32)
+        .or_default();
 
-    let id = articles.len();
-    articles.push(NewArticle {
-        original_owner: original_owner_kind as i32,
-        weapon_id: original_weapon_kind,
+    let kind = WEAPON_COUNT.fetch_add(1, Ordering::Relaxed) as i32;
+    let table_id = weapons.len();
+
+    weapons.push(NewWeapon {
+        old_owner_kind: original_owner_kind as i32,
+        owner_kind: new_owner_kind as i32,
+        owner_name: new_owner.clone(),
+        new_name: new_name.clone(),
+        old_name: original_name.to_string(),
+        kind,
+        old_kind: original_weapon_kind as i32,
+        use_original_code,
     });
 
-    id as i32
+    WEAPON_NAMES.write().push(CString::new(new_name).unwrap().into_raw());
+    WEAPON_OWNER_NAMES.write().push(CString::new(new_owner).unwrap().into_raw());
+    WEAPON_OWNER_KINDS.write().push(new_owner_kind as i32);
+    BASE_WEAPON_KIND.write().push(original_owner_kind as i32);
+
+    CloneWeaponInfo {
+        kind,
+        table_id: table_id as i32,
+    }
 }
 
 #[no_mangle]

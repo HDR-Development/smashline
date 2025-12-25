@@ -1,6 +1,6 @@
 use std::{
+    ffi::{c_char, CStr, CString},
     ops::{Deref, DerefMut},
-    ffi::{c_char, CStr},
     sync::OnceLock,
 };
 
@@ -55,13 +55,16 @@ impl PushArray<*const c_char> for DynamicArrayAccessor<*const c_char> {
     fn push(&mut self, item: *const c_char) {
         let data: &mut Vec<*const c_char> = self;
         
-        let item = unsafe {
+        let new_item = unsafe {
             data.iter()
                 .find(|&&x| CStr::from_ptr(x) == CStr::from_ptr(item))
+                .inspect(|x| {
+                    let _ = CString::from_raw(item as *mut i8);
+                })
                 .unwrap_or(&item)
         };
 
-        data.push(*item);
+        data.push(*new_item);
     }
 }
 
