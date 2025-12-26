@@ -30,11 +30,15 @@ pub fn get_weapon_owner_name(id: i32) -> Option<String> {
     }
 }
 
-pub fn get_weapon_code_dependency(id: i32) -> Option<i32> {
+pub fn get_weapon_code_dependency(kind: i32) -> Option<i32> {
     let current_owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_WEAPONS.read();
 
-    try_get_new_agent(&agents, id, current_owner).and_then(|x| x.use_original_code.then_some(x.old_owner_kind))
+    NEW_WEAPONS.read()
+        .get(&current_owner)
+        .into_iter()
+        .flatten()
+        .find(|&x| x.kind == kind && x.use_original_code)
+        .map(|x| x.old_owner_kind)
 }
 
 pub fn get_costume_from_entry_id(entry_id: i32) -> Option<i32> {

@@ -28,9 +28,9 @@ pub struct NewWeapon {
 
 // pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
 pub static NEW_WEAPONS: RwLock<BTreeMap<i32, Vec<NewWeapon>>> = RwLock::new(BTreeMap::new());
-pub static IGNORE_NEW_AGENTS: AtomicBool = AtomicBool::new(false);
+pub static IS_USING_ORIGINAL_CODE: AtomicBool = AtomicBool::new(false);
 
-const ORIGINAL_WEAPON_COUNT: usize = 0x267;
+pub const ORIGINAL_WEAPON_COUNT: usize = 0x267;
 pub static WEAPON_COUNT: AtomicUsize = AtomicUsize::new(ORIGINAL_WEAPON_COUNT);
 
 pub static WEAPON_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5185bd0, ORIGINAL_WEAPON_COUNT));
@@ -191,18 +191,33 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
 }
 
 fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
-    let index = ctx.registers[source_register].x() >> shift;
-    ctx.registers[dst_register].set_x(WEAPON_OWNER_KINDS.read()[index as usize] as u64);
+    let mut kind = ctx.registers[source_register].x() >> shift;
+
+    if IS_USING_ORIGINAL_CODE.load(Ordering::Relaxed) { 
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - crate::cloning::weapons::ORIGINAL_WEAPON_COUNT] as u64;
+    }
+
+    ctx.registers[dst_register].set_x(WEAPON_OWNER_KINDS.read()[kind as usize] as u64);
 }
 
 fn weapon_owner_name_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
-    let index = ctx.registers[source_register].x() >> shift;
-    ctx.registers[dst_register].set_x(WEAPON_OWNER_NAMES.read()[index as usize] as u64);
+    let mut kind = ctx.registers[source_register].x() >> shift;
+
+    if IS_USING_ORIGINAL_CODE.load(Ordering::Relaxed) { 
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - crate::cloning::weapons::ORIGINAL_WEAPON_COUNT] as u64;
+    }
+
+    ctx.registers[dst_register].set_x(WEAPON_OWNER_NAMES.read()[kind as usize] as u64);
 }
 
 fn weapon_name_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
-    let index = ctx.registers[source_register].x() >> shift;
-    ctx.registers[dst_register].set_x(WEAPON_NAMES.read()[index as usize] as u64);
+    let mut kind = ctx.registers[source_register].x() >> shift;
+
+    if IS_USING_ORIGINAL_CODE.load(Ordering::Relaxed) { 
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - crate::cloning::weapons::ORIGINAL_WEAPON_COUNT] as u64;
+    }
+
+    ctx.registers[dst_register].set_x(WEAPON_NAMES.read()[kind as usize] as u64);
 }
 
 macro_rules! decl_hooks {

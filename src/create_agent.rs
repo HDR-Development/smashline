@@ -25,7 +25,7 @@ use smashline::{
 use vtables::{CustomDataAccessError, VirtualClass};
 
 use crate::{
-    cloning::weapons::{IGNORE_NEW_AGENTS, WEAPON_NAMES, WEAPON_OWNER_NAMES}, interpreter::LoadedScript,
+    cloning::weapons::{IS_USING_ORIGINAL_CODE, WEAPON_NAMES, WEAPON_OWNER_NAMES}, interpreter::LoadedScript,
     static_accessor::StaticArrayAccessor, callbacks::{CALLBACKS, StatusCallbackFunction}
 };
 
@@ -577,9 +577,9 @@ fn create_agent_hook(
                     std::thread::sleep(Duration::from_millis(1));
                 }
 
-                IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
+                IS_USING_ORIGINAL_CODE.store(true, Ordering::Relaxed);
                 let result = original.call(object, boma, lua_state);
-                IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
+                IS_USING_ORIGINAL_CODE.store(false, Ordering::Relaxed);
 
                 if let Some(agent) = result {
                     (agent, Some(fighter_id))
@@ -1069,9 +1069,9 @@ fn create_agent_status_weapon(
                 std::thread::sleep(Duration::from_millis(1));
             }
 
-            IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
+            IS_USING_ORIGINAL_CODE.store(true, Ordering::Relaxed);
             let result = call_original!(object, boma, lua_state);
-            IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
+            IS_USING_ORIGINAL_CODE.store(false, Ordering::Relaxed);
 
             if let Some(agent) = result {
                 (false, agent, Some(fighter_id))
