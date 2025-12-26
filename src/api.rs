@@ -381,7 +381,7 @@ pub extern "C" fn smashline_clone_weapon(
     WEAPON_KIND_HASHES.write().push(Hash40::new(
         &format!("weapon_kind_{}_{}", new_owner, new_name)
     ).0);
-    BASE_WEAPON_KIND.write().push(original_owner_kind as i32);
+    BASE_WEAPON_KIND.write().push(original_weapon_kind as i32);
 
     CloneWeaponInfo {
         kind,
