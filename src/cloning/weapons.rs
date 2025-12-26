@@ -162,16 +162,17 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
         }
     }
 
-    if let Some(new_articles) = NEW_WEAPONS.read().get(&kind) {
+    if let Some(new_weapons) = NEW_WEAPONS.read().get(&kind) {
 
-        for article in new_articles.iter() {
-            let source_data = call_original!(article.old_owner_kind);
+        for weapon in new_weapons.iter() {
+            let source_data = call_original!(weapon.old_owner_kind);
 
             unsafe {
-                let Some(article) = (*source_data).get_article(article.old_kind) else {
+                let Some(mut article) = (*source_data).get_article(weapon.old_kind) else {
                     panic!("Failed to append article table");
                 };
 
+                article.weapon_id = weapon.kind;
                 new_descriptors.push(article);
             }
         }
