@@ -420,7 +420,7 @@ decl_hooks_mimic_echo_weapon! {
     get_hashes2(0x3ae7bc)
 }
 
-#[skyline::hook(offset = 0x17e09a4, inline)]
+#[skyline::hook(offset = 0x17e09a8, inline)]
 unsafe fn mimic_echo_weapon_file_category(ctx: &mut InlineCtx) {
     let mut kind = ctx.registers[26].x() as i32;
 
@@ -436,7 +436,11 @@ unsafe fn mimic_echo_weapon_file_category(ctx: &mut InlineCtx) {
         kind = 0;
     }
 
-    ctx.registers[26].set_x(kind as u64);
+    let text = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as *const u8;
+    let file_category_table = text.add(0x5186f08) as *const *const c_char;
+    let file_category = *file_category_table.add(kind as usize);
+
+    ctx.registers[25].set_x(file_category as u64);
 }
 
 #[skyline::hook(offset = 0x33b5d10, inline)]
