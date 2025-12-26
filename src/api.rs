@@ -333,33 +333,26 @@ pub extern "C" fn smashline_clone_weapon(
 
     let mut new_weapons = crate::cloning::weapons::NEW_WEAPONS.write();
 
-    /* let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
-    let articles = new_articles
-        .entry(new_owner_kind as i32)
-        .or_default(); */
-
-    /* if let Some(id) = articles.iter().position(|article|
-        article.original_owner == original_owner_kind as i32 &&
-        article.weapon_id == original_weapon_kind
-    ) {
-        return id as i32;
-    }
-
-    for agents in new_agents.values() {
-        if let Some(agent) = agents.iter().find(|agent| 
-            agent.owner_name == new_owner && agent.new_name == new_name
-        ) {
-            let owner = LOWERCASE_FIGHTER_NAMES.get(agent.old_owner_kind as usize).unwrap();
-            panic!(
-                "Weapon with the name '{}_{}' has already been cloned, but using '{}_{}' instead of '{}_{}'", 
-                new_owner, new_name, owner, agent.old_name, original_owner, original_name
-            );
-        }
-    } */
-
     let weapons = new_weapons
         .entry(new_owner_kind as i32)
         .or_default();
+
+    for (i, weapon) in weapons.iter().enumerate() {
+        if weapon.old_owner_kind == original_owner_kind as i32
+        && weapon.owner_name == new_owner
+        && weapon.new_name == new_name
+        && weapon.old_name == original_name
+        && weapon.old_kind == original_weapon_kind {
+            // TODO: Properly handle a situation where we're
+            // cloning a weapon, even though it already exists.
+            // Maybe only consider if new_name is the same?
+
+            return CloneWeaponInfo {
+                kind: weapon.kind,
+                table_id: i as i32,
+            };
+        }
+    }
 
     let kind = WEAPON_COUNT.fetch_add(1, Ordering::Relaxed) as i32;
     let table_id = weapons.len();
