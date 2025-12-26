@@ -21,12 +21,6 @@ pub struct NewWeapon {
     pub use_original_code: bool,
 }
 
-/* pub struct NewArticle {
-    pub original_owner: i32,
-    pub weapon_id: i32,
-} */
-
-// pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
 pub static NEW_WEAPONS: RwLock<BTreeMap<i32, Vec<NewWeapon>>> = RwLock::new(BTreeMap::new());
 pub static IS_USING_ORIGINAL_CODE: AtomicBool = AtomicBool::new(false);
 
@@ -42,15 +36,6 @@ pub static BASE_WEAPON_KIND: RwLock<Vec<i32>> = RwLock::new(Vec::new());
 pub static CURRENT_WEAPON_KIND: AtomicI32 = AtomicI32::new(-1);
 
 pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
-
-pub fn try_get_new_agent(
-    map: &BTreeMap<i32, Vec<NewWeapon>>,
-    weapon: i32,
-    owner: i32,
-) -> Option<&NewWeapon> {
-    map.get(&weapon)
-        .and_then(|v| v.iter().find(|a| a.owner_kind == owner))
-}
 
 pub static CURRENT_OWNER_KIND: AtomicI32 = AtomicI32::new(-1);
 

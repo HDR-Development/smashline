@@ -5,30 +5,9 @@ use smashline::{Costume, Hash40};
 
 use crate::{
     cloning::fighters::CURRENT_PLAYER_ID,
-    cloning::weapons::{try_get_new_agent, CURRENT_OWNER_KIND, NEW_WEAPONS},
+    cloning::weapons::{CURRENT_OWNER_KIND, NEW_WEAPONS},
     create_agent::{COSTUMES, LOWERCASE_WEAPON_NAMES, LOWERCASE_WEAPON_OWNER_NAMES, LOWERCASE_FIGHTER_NAMES}
 };
-
-pub fn get_weapon_name(id: i32) -> Option<String> {
-    let current_owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_WEAPONS.read();
-    if let Some(name) = try_get_new_agent(&agents, id, current_owner).map(|agent| agent.new_name.clone()) {
-        Some(name)
-    } else {
-        LOWERCASE_WEAPON_NAMES.get(id as usize).map(|x| x.to_string())
-    }
-}
-
-pub fn get_weapon_owner_name(id: i32) -> Option<String> {
-    let current_owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_WEAPONS.read();
-
-    if let Some(name) = try_get_new_agent(&agents, id, current_owner).map(|agent| agent.owner_name.clone()) {
-        Some(name)
-    } else {
-        LOWERCASE_WEAPON_OWNER_NAMES.get(id as usize).map(|x| x.to_string())
-    }
-}
 
 pub fn get_weapon_code_dependency(kind: i32) -> Option<i32> {
     let current_owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
