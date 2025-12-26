@@ -155,13 +155,6 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
 
     new_descriptors.extend_from_slice(unsafe { (*original_data).articles_as_slice() });
 
-    for article in new_descriptors.iter_mut() {
-        let weapon_count = WEAPON_COUNT_UPDATE.read();
-        if let Some(new_count) = weapon_count.get(&article.weapon_id) {
-            article.max_count = *new_count;
-        }
-    }
-
     if let Some(new_weapons) = NEW_WEAPONS.read().get(&kind) {
 
         for weapon in new_weapons.iter() {
@@ -175,6 +168,13 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
                 article.weapon_id = weapon.kind;
                 new_descriptors.push(article);
             }
+        }
+    }
+
+    for article in new_descriptors.iter_mut() {
+        let weapon_count = WEAPON_COUNT_UPDATE.read();
+        if let Some(new_count) = weapon_count.get(&article.weapon_id) {
+            article.max_count = *new_count;
         }
     }
 
