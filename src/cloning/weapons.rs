@@ -336,31 +336,50 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     let fighter_data = get_static_fighter_data(kind);
     CURRENT_KIRBY_COPY.store(-1, Ordering::Relaxed);
     IS_KIRBY_COPYING.store(false, Ordering::Relaxed);
-    
+
     let mut new_descriptors = vec![];
-    
+
     for article in  (*original_descriptors).articles_as_slice().iter() {
         new_descriptors.push(*article);
     }
-    
+
+    if let Some(whitelist) = kirby_copy_whitelist.get(&kind) {
+        for article in (*fighter_data).articles_as_slice().iter() {
+            // New Handling to add any missing StaticArticleData to Kirby
+            let mut contains_article = false;
+            for descriptor in new_descriptors.iter_mut() {
+                // If the ArticleData exists...
+                if article.weapon_id == descriptor.weapon_id {
+                    // Set contains_article to true.
+                    contains_article = true;
+                    if whitelist.contains(&article.weapon_id) {
+                        *descriptor = *article;
+                    }
+                    break;
+                }
+            }
+            if !contains_article {
+                if whitelist.contains(&article.weapon_id) {
+                    new_descriptors.push(*article);
+                }
+                else {
+                    new_descriptors.push(ArticleDescriptor{
+                        weapon_id: article.weapon_id,
+                        max_count: 0,
+                        on_init_callback: unsafe { std::mem::transmute(0u64) },
+                        on_fini_callback: unsafe { std::mem::transmute(0u64) },
+                        extra: 0
+                    })
+                }
+            }
+        }
+    }
+
     for article in new_descriptors.iter_mut() {
         // println!("checking count for article id {:#x}", article.weapon_id);
         let weapon_count = WEAPON_COUNT_UPDATE.read();
         if let Some(new_count) = weapon_count.get(&article.weapon_id) {
             article.max_count = *new_count;
-        }
-    }
-    
-    if let Some(whitelist) = kirby_copy_whitelist.get(&kind) {
-        for article in (*fighter_data).articles_as_slice().iter() {
-            if whitelist.contains(&article.weapon_id) {
-                // println!("Whitelist contains article {:#x}", article.weapon_id);
-                for descriptor in new_descriptors.iter_mut() {
-                    if article.weapon_id == descriptor.weapon_id {
-                        *descriptor = *article;
-                    }
-                }
-            }
         }
     }
 
