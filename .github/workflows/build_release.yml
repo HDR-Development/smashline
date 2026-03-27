@@ -1,0 +1,59 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  get-version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.1.4
+      - name: Get Plugin Version
+        id: plugin-version
+        # You may pin to the exact commit or the version.
+        # uses: dante-signal31/rust-app-version@752c1afc51739ac75b36157cdd20e7116d203980
+        uses: dante-signal31/rust-app-version@v1.2.0
+    outputs:
+      version: ${{ steps.plugin-version.outputs.app_version }}
+
+  package:
+    needs: get-version
+    runs-on: ubuntu-24.04
+    container:
+      image: wuboyth/skyline-plugin-builder:latest
+    steps:
+      - uses: actions/checkout@v4.1.4
+      - name: Build Release NRO
+        run: |
+          cargo skyline build --release && mv ./target/aarch64-skyline-switch/release/libsmashline_plugin.nro ./
+        env:
+          HOME: /root
+      - name: Upload Plugin Artifact (Main)
+        uses: actions/upload-artifact@v4.3.3
+        with:
+          name: smashline_plugin
+          path: libsmashline_plugin.nro
+
+  upload:
+    runs-on: ubuntu-24.04
+    needs: [ package, get-version ]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4.1.7
+      - name: Create Main Draft Release
+        uses: softprops/action-gh-release@v0.1.15
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{needs.get-version.outputs.version}}
+          name: ${{needs.get-version.outputs.version}}
+          draft: true
+          prerelease: false
+          body: >
+            Full release of the latest version. DO NOT PUBLISH UNTIL THIS BODY HAS BEEN UPDATED.
+
+            ## Installation
+
+            Place libsmashline_plugin.nro into SD://atmosphere/contents/01006A800016E000/romfs/skyline/plugins/
+          files: >
+            smashline_plugin/*
