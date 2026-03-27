@@ -8,6 +8,25 @@ use std::{
 
 pub use vtable_macro::*;
 
+// Ryujinx reports heap addresses as inside module range, breaking get_memory_state().
+// Keep track of relocated vtable addrs so we can skip the check for them.
+static RELOCATED_VTABLES: locks::RwLock<Vec<usize>> = locks::RwLock::new(Vec::new());
+
+fn mark_relocated(addr: usize) {
+    let mut vt = RELOCATED_VTABLES.write();
+    if !vt.contains(&addr) {
+        vt.push(addr);
+    }
+}
+
+fn is_relocated(addr: usize) -> bool {
+    RELOCATED_VTABLES.read().contains(&addr)
+}
+
+fn unmark_relocated(addr: usize) {
+    RELOCATED_VTABLES.write().retain(|&a| a != addr);
+}
+
 const CUSTOM_VTABLE_MAGIC: u64 = u64::from_le_bytes(*b"VRTMANIP");
 
 pub trait VTableAccessor {
@@ -105,8 +124,9 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
     }
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
-            != rtld::MemoryState::DereferencableOutsideModule
+        !is_relocated(vtable_ptr.expose_provenance())
+            && rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
+                != rtld::MemoryState::DereferencableOutsideModule
     } else {
         vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
@@ -163,8 +183,9 @@ pub fn vtable_mutation_guard<V, T: VirtualClass + DerefMut<Target = V>>(vtable: 
         unsafe {
             let data = std::ptr::read(*vtable);
             std::ptr::write(new_memory.add(new_vtable_offset * 0x8).cast(), data);
-            *(vtable as *mut &mut V as *mut *mut V) =
-                new_memory.add(new_vtable_offset * 0x8).cast();
+            let new_vtable_addr = new_memory.add(new_vtable_offset * 0x8);
+            *(vtable as *mut &mut V as *mut *mut V) = new_vtable_addr.cast();
+            mark_relocated(new_vtable_addr as usize);
         }
 
         return;
@@ -218,8 +239,9 @@ pub fn vtable_read_guard<V, T: VirtualClass + Deref<Target = V>>(vtable: &V) {
     let vtable_ptr = (vtable as *const V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
-            != rtld::MemoryState::DereferencableOutsideModule
+        !is_relocated(vtable_ptr.expose_provenance())
+            && rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
+                != rtld::MemoryState::DereferencableOutsideModule
     } else {
         vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
@@ -310,8 +332,9 @@ pub fn vtable_custom_data<V, T: VirtualClass + Deref<Target = V>>(
     let vtable_ptr = (vtable as *const V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
-            != rtld::MemoryState::DereferencableOutsideModule
+        !is_relocated(vtable_ptr.expose_provenance())
+            && rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
+                != rtld::MemoryState::DereferencableOutsideModule
     } else {
         vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
@@ -367,8 +390,9 @@ pub fn vtable_custom_data_mut<V, T: VirtualClass + DerefMut<Target = V>>(
     let vtable_ptr = (vtable as *mut V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
-            != rtld::MemoryState::DereferencableOutsideModule
+        !is_relocated(vtable_ptr.expose_provenance())
+            && rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
+                != rtld::MemoryState::DereferencableOutsideModule
     } else {
         vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
@@ -424,8 +448,9 @@ pub fn vtable_restore_vtable<'a, 'b, V, T: VirtualClass + DerefMut<Target = V>>(
     let vtable_ptr = (*vtable as *mut V).cast::<u64>();
 
     let needs_reloc = if T::DISABLE_OFFSET_CHECK {
-        rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
-            != rtld::MemoryState::DereferencableOutsideModule
+        !is_relocated(vtable_ptr.expose_provenance())
+            && rtld::get_memory_state(vtable_ptr.expose_provenance() as u64)
+                != rtld::MemoryState::DereferencableOutsideModule
     } else {
         vtable_ptr.expose_provenance() == T::main_address() + T::VTABLE_OFFSET
     };
@@ -480,6 +505,7 @@ pub fn vtable_restore_vtable<'a, 'b, V, T: VirtualClass + DerefMut<Target = V>>(
         total_size += 8;
     }
 
+    let old_vtable_addr = vtable_ptr.expose_provenance();
     unsafe {
         *vtable = std::mem::transmute(context.old_vtable);
         drop(Box::from_raw(context));
@@ -488,6 +514,7 @@ pub fn vtable_restore_vtable<'a, 'b, V, T: VirtualClass + DerefMut<Target = V>>(
             Layout::from_size_align(total_size, 0x8).unwrap(),
         );
     }
+    unmark_relocated(old_vtable_addr);
 
     vtable
 }
