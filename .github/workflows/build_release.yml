@@ -14,7 +14,7 @@ jobs:
           VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
     outputs:
-      app-version: ${{ steps.ver.outputs.version }}
+      version: ${{ steps.plugin-version.outputs.version }}
 
   package:
     needs: get-version
