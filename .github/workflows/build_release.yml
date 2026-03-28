@@ -41,9 +41,9 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4.1.7
       - name: Create Main Draft Release
-        uses: softprops/action-gh-release@v0.1.15
+        uses: softprops/action-gh-release@v2.6.1
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_SECRET }}
         with:
           tag_name: ${{needs.get-version.outputs.version}}
           name: ${{needs.get-version.outputs.version}}
