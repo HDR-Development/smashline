@@ -111,6 +111,7 @@ mod params;
 mod runtime_reload;
 mod state_callback;
 mod static_accessor;
+mod dynamic_accessor;
 mod unwind;
 mod utils;
 

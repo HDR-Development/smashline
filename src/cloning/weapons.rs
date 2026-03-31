@@ -1,42 +1,41 @@
 use std::{
     collections::BTreeMap,
-    sync::atomic::{AtomicBool, AtomicI32, Ordering},
+    sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering},
+    ffi::{c_char, c_void},
 };
 
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
 use smashline::{skyline_smash::app::BattleObjectModuleAccessor, Hash40};
 
-pub struct NewAgent {
-    pub old_owner_id: i32,
-    pub owner_id: i32,
-    pub owner_name_ffi: String,
-    pub new_name_ffi: String,
+use crate::dynamic_accessor::DynamicArrayAccessor;
+
+pub struct NewWeapon {
+    pub old_owner_kind: i32,
+    pub owner_kind: i32,
     pub owner_name: String,
     pub new_name: String,
     pub old_name: String,
+    pub kind: i32,
+    pub old_kind: i32,
     pub use_original_code: bool,
 }
 
-pub struct NewArticle {
-    pub original_owner: i32,
-    pub weapon_id: i32,
-}
+pub static NEW_WEAPONS: RwLock<BTreeMap<i32, Vec<NewWeapon>>> = RwLock::new(BTreeMap::new());
+pub static IS_USING_ORIGINAL_CODE: AtomicBool = AtomicBool::new(false);
 
-pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
-pub static NEW_AGENTS: RwLock<BTreeMap<i32, Vec<NewAgent>>> = RwLock::new(BTreeMap::new());
-pub static IGNORE_NEW_AGENTS: AtomicBool = AtomicBool::new(false);
+pub const ORIGINAL_WEAPON_COUNT: usize = 0x267;
+pub static WEAPON_COUNT: AtomicUsize = AtomicUsize::new(ORIGINAL_WEAPON_COUNT);
+
+pub static WEAPON_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5185bd0, ORIGINAL_WEAPON_COUNT));
+pub static WEAPON_OWNER_NAMES: RwLock<DynamicArrayAccessor<*const c_char>> = RwLock::new(DynamicArrayAccessor::new(0x5188240, ORIGINAL_WEAPON_COUNT));
+pub static WEAPON_OWNER_KINDS: RwLock<DynamicArrayAccessor<i32>> = RwLock::new(DynamicArrayAccessor::new(0x455d7e4, ORIGINAL_WEAPON_COUNT));
+pub static WEAPON_KIND_HASHES: RwLock<DynamicArrayAccessor<u64>> = RwLock::new(DynamicArrayAccessor::new(0x455e650, ORIGINAL_WEAPON_COUNT));
+pub static BASE_WEAPON_KIND: RwLock<Vec<i32>> = RwLock::new(Vec::new());
+
+pub static CURRENT_WEAPON_KIND: AtomicI32 = AtomicI32::new(-1);
 
 pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
-
-pub fn try_get_new_agent(
-    map: &BTreeMap<i32, Vec<NewAgent>>,
-    weapon: i32,
-    owner: i32,
-) -> Option<&NewAgent> {
-    map.get(&weapon)
-        .and_then(|v| v.iter().find(|a| a.owner_id == owner))
-}
 
 pub static CURRENT_OWNER_KIND: AtomicI32 = AtomicI32::new(-1);
 
@@ -141,25 +140,26 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
 
     new_descriptors.extend_from_slice(unsafe { (*original_data).articles_as_slice() });
 
+    if let Some(new_weapons) = NEW_WEAPONS.read().get(&kind) {
+
+        for weapon in new_weapons.iter() {
+            let source_data = call_original!(weapon.old_owner_kind);
+
+            unsafe {
+                let Some(mut article) = (*source_data).get_article(weapon.old_kind) else {
+                    panic!("Failed to append article table");
+                };
+
+                article.weapon_id = weapon.kind;
+                new_descriptors.push(article);
+            }
+        }
+    }
+
     for article in new_descriptors.iter_mut() {
         let weapon_count = WEAPON_COUNT_UPDATE.read();
         if let Some(new_count) = weapon_count.get(&article.weapon_id) {
             article.max_count = *new_count;
-        }
-    }
-
-    if let Some(new_articles) = NEW_ARTICLES.read().get(&kind) {
-
-        for article in new_articles.iter() {
-            let source_data = call_original!(article.original_owner);
-
-            unsafe {
-                let Some(article) = (*source_data).get_article(article.weapon_id) else {
-                    panic!("Failed to append article table");
-                };
-
-                new_descriptors.push(article);
-            }
         }
     }
 
@@ -175,60 +175,42 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     Box::leak(new_fighter_data)
 }
 
-fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
+fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
+    let mut kind = ctx.registers[source_register].x() >> shift;
+
+    if IS_USING_ORIGINAL_CODE.load(Ordering::Relaxed) { 
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - crate::cloning::weapons::ORIGINAL_WEAPON_COUNT] as u64;
     }
 
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
-        return;
-    };
-
-    unsafe {
-        ctx.registers[dst_register].set_x(agent.owner_id as u64);
-    }
+    ctx.registers[dst_register].set_x(WEAPON_OWNER_KINDS.read()[kind as usize] as u64);
 }
 
-fn weapon_owner_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
+fn weapon_owner_name_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
+    let mut kind = ctx.registers[source_register].x() >> shift;
+
+    if IS_USING_ORIGINAL_CODE.load(Ordering::Relaxed) { 
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - crate::cloning::weapons::ORIGINAL_WEAPON_COUNT] as u64;
     }
 
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
-        return;
-    };
-
-    unsafe {
-        ctx.registers[dst_register].set_x(agent.owner_name_ffi.as_ptr() as u64);
-    }
+    ctx.registers[dst_register].set_x(WEAPON_OWNER_NAMES.read()[kind as usize] as u64);
 }
 
-fn weapon_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
+fn weapon_name_hook(ctx: &mut InlineCtx, source_register: usize, shift: u32, dst_register: usize) {
+    let mut kind = ctx.registers[source_register].x() >> shift;
+
+    if IS_USING_ORIGINAL_CODE.load(Ordering::Relaxed) { 
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - crate::cloning::weapons::ORIGINAL_WEAPON_COUNT] as u64;
     }
 
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
-        return;
-    };
-
-    unsafe {
-        ctx.registers[dst_register].set_x(agent.new_name_ffi.as_ptr() as u64);
-    }
+    ctx.registers[dst_register].set_x(WEAPON_NAMES.read()[kind as usize] as u64);
 }
 
 macro_rules! decl_hooks {
-    ($install_fn:ident => $func:expr; $($name:ident($src:expr, $dst:expr, $offset:expr));*) => {
+    ($install_fn:ident => $func:expr; $($name:ident($src:expr, $shift:expr, $dst:expr, $offset:expr));*) => {
         $(
             #[skyline::hook(offset = $offset, inline)]
             unsafe fn $name(ctx: &mut InlineCtx) {
-                $func(ctx, $src, $dst);
+                $func(ctx, $src, $shift, $dst);
             }
         )*
 
@@ -244,32 +226,32 @@ macro_rules! decl_hooks {
 
 decl_hooks! {
     install_weapon_owner_hooks => weapon_owner_hook;
-    params(21, 26, 0x33b6628);
-    game_animcmd_owner(22, 8, 0x33acf78);
-    sound_animcmd_owner(22, 8, 0x33aee38);
-    effect_animcmd_owner(22, 8, 0x33aded8);
-    status_script_owner(22, 8, 0x33ac040)
+    params(21, 0, 26, 0x33b6628);
+    game_animcmd_owner(22, 0, 8, 0x33acf78);
+    sound_animcmd_owner(22, 0, 8, 0x33aee38);
+    effect_animcmd_owner(22, 0, 8, 0x33aded8);
+    status_script_owner(22, 0, 8, 0x33ac040)
 }
 
 decl_hooks! {
     install_weapon_owner_name_hooks => weapon_owner_name_hook;
-    get_file(26, 25, 0x17e0a4c);
-    game_animcmd_owner_name(8, 2, 0x33ace7c);
-    sound_animcmd_owner_name(8, 2, 0x33aed3c);
-    effect_animcmd_owner_name(8, 2, 0x33adddc);
-    status_script_owner_name(8, 2, 0x33abf54)
+    get_file(26, 0, 25, 0x17e0a4c);
+    game_animcmd_owner_name(8, 3, 2, 0x33ace7c);
+    sound_animcmd_owner_name(8, 3, 2, 0x33aed3c);
+    effect_animcmd_owner_name(8, 3, 2, 0x33adddc);
+    status_script_owner_name(8, 3, 2, 0x33abf54)
 }
 
 decl_hooks! {
     install_weapon_name_hooks => weapon_name_hook;
-    get_file_weapon_name(23, 22, 0x17e098c);
-    normal_param_data(21, 27, 0x33b6830);
-    map_collision_param_data(21, 2, 0x33b69f0);
-    visibility_param_data(21, 2, 0x33b6d14);
-    game_animcmd_weapon_name(8, 3, 0x33ace8c);
-    sound_animcmd_weapon_name(8, 3, 0x33aed4c);
-    effect_animcmd_weapon_name(8, 3, 0x33addec);
-    status_script_weapon_name(8, 3, 0x33abf64)
+    get_file_weapon_name(23, 0, 22, 0x17e0890);
+    normal_param_data(21, 0, 27, 0x33b6830);
+    map_collision_param_data(21, 0, 2, 0x33b69f0);
+    visibility_param_data(21, 0, 2, 0x33b6d14);
+    game_animcmd_weapon_name(8, 3, 3, 0x33ace8c);
+    sound_animcmd_weapon_name(8, 3, 3, 0x33aed4c);
+    effect_animcmd_weapon_name(8, 3, 3, 0x33addec);
+    status_script_weapon_name(8, 3, 3, 0x33abf64)
 }
 
 macro_rules! decl_hooks_kirby_get_kind {
@@ -393,13 +375,128 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     ctx.registers[store_reg].set_x(static_article_info as *const StaticArticleData as u64);
 }
 
+macro_rules! decl_hooks_mimic_echo_weapon {
+    ($install_fn:ident; $($name:ident($offset:expr) -> $return_type:ty);*) => {
+        $(
+            #[skyline::hook(offset = $offset)]
+            unsafe fn $name(kind: i32) -> $return_type {
+                let k = if kind < ORIGINAL_WEAPON_COUNT as i32
+                || kind >= WEAPON_COUNT.load(Ordering::Relaxed) as i32 {
+                    kind
+                } else {
+                    BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT]
+                };
+
+                call_original!(k)
+            }
+        )*
+
+        fn $install_fn() {
+            skyline::install_hooks!(
+                $(
+                    $name,
+                )*
+            );
+        }
+    };
+    (hashes; $install_fn:ident; $($name:ident($offset:expr));*) => {
+        $(
+            #[skyline::hook(offset = $offset, inline)]
+            unsafe fn $name(ctx: &mut InlineCtx) {
+                let kind = ctx.registers[20].w() as i32;
+
+                let hash = if kind > WEAPON_COUNT.load(Ordering::Relaxed) as i32 {
+                    Hash40::new("weapon_kind_none").0
+                } else {
+                    WEAPON_KIND_HASHES.read()[kind as usize]
+                };
+
+                ctx.registers[4].set_x(hash);
+            }
+        )*
+
+        fn $install_fn() {
+            skyline::install_hooks!(
+                $(
+                    $name,
+                )*
+            );
+        }
+    };
+}
+
+decl_hooks_mimic_echo_weapon! {
+    install_mimic_echo_weapon_hooks;
+    get_weapon_bone_stuff(0x33aa1e0) -> *const c_void;
+    get_weapon_vtable(0x33be790) -> *const c_void;
+    idk(0x33afc00) -> i32
+}
+
+decl_hooks_mimic_echo_weapon! {
+    hashes;
+    install_mimic_echo_weapon_kind_hash_hooks;
+    get_hashes1(0x3ae24c);
+    get_hashes2(0x3ae7bc)
+}
+
+#[skyline::hook(offset = 0x17e09a8, inline)]
+unsafe fn mimic_echo_weapon_file_category(ctx: &mut InlineCtx) {
+    let mut kind = ctx.registers[26].x() as i32;
+
+    if kind >= ORIGINAL_WEAPON_COUNT as i32 {
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT];
+    }
+
+    // Just in case kind is still somehow larger
+    // than the original weapon count, then we're
+    // going to assume "fighter" when getting the file.
+    // There's only 1 case where it's "enemy" instead
+    if kind >= ORIGINAL_WEAPON_COUNT as i32 {
+        kind = 0;
+    }
+
+    let text = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as *const u8;
+    let file_category_table = text.add(0x5186f08) as *const *const c_char;
+    let file_category = *file_category_table.add(kind as usize);
+
+    ctx.registers[25].set_x(file_category as u64);
+}
+
+#[skyline::hook(offset = 0x33b5d10, inline)]
+unsafe fn save_weapon_kind(ctx: &mut InlineCtx) {
+    let mut kind = ctx.registers[28].w();
+
+    CURRENT_WEAPON_KIND.store(kind as i32, Ordering::Relaxed);
+
+    if kind >= ORIGINAL_WEAPON_COUNT as u32 {
+        kind = BASE_WEAPON_KIND.read()[(kind as usize) - ORIGINAL_WEAPON_COUNT] as u32;
+    }
+
+    ctx.registers[28].set_w(kind);
+}
+
+#[skyline::hook(offset = 0x33b6528, inline)]
+unsafe fn restore_weapon_kind(ctx: &mut InlineCtx) {
+    ctx.registers[28].set_w(CURRENT_WEAPON_KIND.load(Ordering::Relaxed) as u32);
+}
+
 pub fn install() {
+    skyline::patching::Patch::in_text(0x3ae23c).nop().unwrap();
+    skyline::patching::Patch::in_text(0x3ae7ac).nop().unwrap();
+    skyline::patching::Patch::in_text(0x17e0894).nop().unwrap();
+
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
     install_weapon_owner_name_hooks();
 
+    install_mimic_echo_weapon_hooks();
+    install_mimic_echo_weapon_kind_hash_hooks();
+
     skyline::install_hooks!(
-        get_static_fighter_data
+        get_static_fighter_data,
+        mimic_echo_weapon_file_category,
+        save_weapon_kind,
+        restore_weapon_kind,
     );
 
     install_kirby_copy_kind_hooks();

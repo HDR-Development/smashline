@@ -93,6 +93,12 @@ impl Costume {
 }
 
 #[repr(C)]
+pub struct CloneWeaponInfo {
+    pub kind: i32,
+    pub table_id: i32,
+}
+
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub enum Acmd {
     Game,
@@ -415,11 +421,11 @@ decl_imports! {
 
     fn smashline_clone_weapon(
         original_owner: StringFFI,
-        original_article_id: i32,
+        original_weapon_kind: i32,
         new_owner: StringFFI,
         new_name: StringFFI,
         use_original_code: bool
-    ) -> i32;
+    ) -> CloneWeaponInfo;
 
     fn smashline_update_weapon_count(
         article_id: i32,
@@ -462,7 +468,7 @@ pub fn clone_weapon(
     new_owner: impl Into<String>,
     new_name: impl Into<String>,
     use_original_code: bool,
-) -> i32 {
+) -> CloneWeaponInfo {
     smashline_clone_weapon(
         StringFFI::from_str(original_owner),
         original_article_id,
