@@ -15,7 +15,7 @@ use vtables::{vtable, VirtualClass};
 
 use std::ops::{Deref, DerefMut};
 
-use crate::cloning::weapons::{try_get_new_agent, NEW_AGENTS, NEW_ARTICLES};
+use crate::cloning::weapons::{NEW_WEAPONS};
 
 pub static WHITELISTED_PARAMS: RwLock<BTreeMap<i32, Vec<Hash40>>> = RwLock::new(BTreeMap::new());
 
@@ -323,10 +323,10 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
     }
 
     let whitelisted_params = WHITELISTED_PARAMS.read();
-    let new_articles = NEW_ARTICLES.read();
+    let new_weapons = NEW_WEAPONS.read();
 
     if whitelisted_params.get(&fighter_id).is_none()
-    && new_articles.get(&fighter_id).is_none() {
+    && new_weapons.get(&fighter_id).is_none() {
         return;
     }
 
@@ -360,16 +360,13 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
     let mut allowed_names = vec![];
     let mut remap_names = HashMap::new();
 
-    let new_agents = NEW_AGENTS.read();
-    if let Some(articles) = new_articles.get(&fighter_id) {
-        for article in articles.iter() {
-            if let Some(agent) = try_get_new_agent(&new_agents, article.weapon_id, fighter_id) {
-                allowed_names.push(Hash40::new(&format!("param_{}", agent.new_name)).0);
-                remap_names.insert(
-                    Hash40::new(&format!("param_{}", agent.old_name)).0,
-                    Hash40::new(&format!("param_{}", agent.new_name)).0,
-                );
-            }
+    if let Some(weapons) = new_weapons.get(&fighter_id) {
+        for weapon in weapons.iter() {
+            allowed_names.push(Hash40::new(&format!("param_{}", weapon.new_name)).0);
+            remap_names.insert(
+                Hash40::new(&format!("param_{}", weapon.old_name)).0,
+                Hash40::new(&format!("param_{}", weapon.new_name)).0,
+            );
         }
     }
 
