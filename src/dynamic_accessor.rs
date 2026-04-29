@@ -54,12 +54,12 @@ impl<T: Clone> DerefMut for DynamicArrayAccessor<T> {
 impl PushArray<*const c_char> for DynamicArrayAccessor<*const c_char> {
     fn push(&mut self, item: *const c_char) {
         let data: &mut Vec<*const c_char> = self;
-        
+
         let new_item = unsafe {
             data.iter()
                 .find(|&&x| CStr::from_ptr(x) == CStr::from_ptr(item))
                 .inspect(|x| {
-                    let _ = CString::from_raw(item as *mut i8);
+                    let _ = CString::from_raw(item as *mut u8);
                 })
                 .unwrap_or(&item)
         };
