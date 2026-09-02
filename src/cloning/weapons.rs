@@ -244,32 +244,32 @@ macro_rules! decl_hooks {
 
 decl_hooks! {
     install_weapon_owner_hooks => weapon_owner_hook;
-    params(21, 26, 0x33b6628);
-    game_animcmd_owner(22, 8, 0x33acf78);
-    sound_animcmd_owner(22, 8, 0x33aee38);
-    effect_animcmd_owner(22, 8, 0x33aded8);
-    status_script_owner(22, 8, 0x33ac040)
+    params(21, 26, 0x33b6628 + 0x5B0);
+    game_animcmd_owner(22, 8, 0x33acf78 + 0x5B0);
+    sound_animcmd_owner(22, 8, 0x33aee38 + 0x5B0);
+    effect_animcmd_owner(22, 8, 0x33aded8 + 0x5B0);
+    status_script_owner(22, 8, 0x33ac040 + 0x5B0)
 }
 
 decl_hooks! {
     install_weapon_owner_name_hooks => weapon_owner_name_hook;
-    get_file(26, 25, 0x17e0a4c);
-    game_animcmd_owner_name(8, 2, 0x33ace7c);
-    sound_animcmd_owner_name(8, 2, 0x33aed3c);
-    effect_animcmd_owner_name(8, 2, 0x33adddc);
-    status_script_owner_name(8, 2, 0x33abf54)
+    get_file(26, 25, 0x17e0a4c - 0x40);
+    game_animcmd_owner_name(8, 2, 0x33ace7c + 0x5B0);
+    sound_animcmd_owner_name(8, 2, 0x33aed3c + 0x5B0);
+    effect_animcmd_owner_name(8, 2, 0x33adddc + 0x5B0);
+    status_script_owner_name(8, 2, 0x33abf54 + 0x5B0)
 }
 
 decl_hooks! {
     install_weapon_name_hooks => weapon_name_hook;
-    get_file_weapon_name(23, 22, 0x17e098c);
-    normal_param_data(21, 27, 0x33b6830);
-    map_collision_param_data(21, 2, 0x33b69f0);
-    visibility_param_data(21, 2, 0x33b6d14);
-    game_animcmd_weapon_name(8, 3, 0x33ace8c);
-    sound_animcmd_weapon_name(8, 3, 0x33aed4c);
-    effect_animcmd_weapon_name(8, 3, 0x33addec);
-    status_script_weapon_name(8, 3, 0x33abf64)
+    get_file_weapon_name(23, 22, 0x17e098c - 0x40);
+    normal_param_data(21, 27, 0x33b6830 + 0x5B0);
+    map_collision_param_data(21, 2, 0x33b69f0 + 0x5B0);
+    visibility_param_data(21, 2, 0x33b6d14 + 0x5B0);
+    game_animcmd_weapon_name(8, 3, 0x33ace8c + 0x5B0);
+    sound_animcmd_weapon_name(8, 3, 0x33aed4c + 0x5B0);
+    effect_animcmd_weapon_name(8, 3, 0x33addec + 0x5B0);
+    status_script_weapon_name(8, 3, 0x33abf64 + 0x5B0)
 }
 
 macro_rules! decl_hooks_kirby_get_kind {
