@@ -227,9 +227,10 @@ pub fn try_get_interpreter_landing_pad() -> Option<u64> {
         .map(|(ip, _)| ip)
 }
 
-static mut CALL_COROUTINE_OFFSET: usize = 0x52e400;
+const CALL_COROUTINE_OFFSET: usize = 0x52e400;
+static mut CALL_COROUTINE_ADDRESS: usize = 0;
 
-#[skyline::hook(replace = CALL_COROUTINE_OFFSET, inline)]
+#[skyline::hook(replace = CALL_COROUTINE_ADDRESS, inline)]
 unsafe fn call_coroutine_hook(ctx: &mut InlineCtx) {
     let hash = Hash40(*(ctx.registers[21].x() as *const u64).add(2));
     ctx.registers[2].set_x(ctx.registers[8].x());
@@ -265,7 +266,9 @@ pub fn install() {
 
 pub fn nro_hook(module_base: u64) {
     unsafe {
-        CALL_COROUTINE_OFFSET += module_base as usize;
+        // The common module can be unloaded and reloaded when entering replays.
+        // Resolve against this load; retaining the previous base produces an invalid address.
+        CALL_COROUTINE_ADDRESS = module_base as usize + CALL_COROUTINE_OFFSET;
         skyline::install_hook!(call_coroutine_hook);
     }
 }
