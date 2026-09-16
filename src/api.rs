@@ -375,6 +375,8 @@ pub extern "C" fn smashline_clone_weapon(
         weapon_id: original_article_id,
     });
 
+    crate::cloning::weapons::invalidate_article_cache();
+
     id as i32
 }
 
@@ -387,6 +389,8 @@ pub extern "C" fn smashline_update_weapon_count(
         .write()
         .entry(article_id)
         .or_default() = new_count;
+
+    crate::cloning::weapons::invalidate_article_cache();
 }
 
 #[no_mangle]
@@ -406,4 +410,6 @@ pub extern "C" fn smashline_whitelist_kirby_copy_article(
     else {
         copy_whitelist.insert(fighter_id, vec![article_id]);
     }
+
+    crate::cloning::weapons::invalidate_article_cache();
 }

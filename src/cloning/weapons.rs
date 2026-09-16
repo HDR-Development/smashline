@@ -45,6 +45,16 @@ pub static CURRENT_KIRBY_COPY: AtomicI32 = AtomicI32::new(-1);
 
 pub static KIRBY_COPY_ARTICLE_WHITELIST: RwLock<BTreeMap<i32, Vec<i32>>> = RwLock::new(BTreeMap::new());
 
+static FIGHTER_DATA_CACHE: RwLock<BTreeMap<i32, &'static StaticFighterData>> =
+    RwLock::new(BTreeMap::new());
+static KIRBY_COPY_DATA_CACHE: RwLock<BTreeMap<i32, &'static StaticArticleData>> =
+    RwLock::new(BTreeMap::new());
+
+pub fn invalidate_article_cache() {
+    FIGHTER_DATA_CACHE.write().clear();
+    KIRBY_COPY_DATA_CACHE.write().clear();
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct StaticFighterData {
@@ -131,11 +141,15 @@ impl StaticArticleData {
 
 #[skyline::hook(offset = 0x64b730)]
 fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
-    let original_data: *const StaticFighterData = call_original!(kind);
-
     if IS_KIRBY_COPYING.load(Ordering::Relaxed) {
-        return original_data;
+        return call_original!(kind);
     }
+
+    if let Some(cached) = FIGHTER_DATA_CACHE.read().get(&kind) {
+        return *cached as *const StaticFighterData;
+    }
+
+    let original_data: *const StaticFighterData = call_original!(kind);
 
     let mut new_descriptors = vec![];
 
@@ -172,7 +186,11 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
 
     let mut new_fighter_data = Box::new(unsafe { *original_data });
     new_fighter_data.static_article_info = static_article_info as *const StaticArticleData;
-    Box::leak(new_fighter_data)
+    let leaked: &'static StaticFighterData = Box::leak(new_fighter_data);
+
+    FIGHTER_DATA_CACHE.write().insert(kind, leaked);
+
+    leaked
 }
 
 fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
@@ -329,6 +347,12 @@ decl_hooks_kirby! {
 
 unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     let kind = CURRENT_KIRBY_COPY.load(Ordering::Relaxed);
+
+    if let Some(cached) = KIRBY_COPY_DATA_CACHE.read().get(&kind) {
+        ctx.registers[store_reg].set_x(*cached as *const StaticArticleData as u64);
+        return;
+    }
+
     let kirby_copy_whitelist = KIRBY_COPY_ARTICLE_WHITELIST.read();
     // println!("Fighter {:#x} is in the whitelist!", kind);
     let original_descriptors = ctx.registers[store_reg].x() as *const StaticArticleData;
@@ -385,10 +409,12 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
 
     let count = new_descriptors.len();
     let ptr = new_descriptors.leak().as_ptr();
-    let static_article_info = Box::leak(Box::new(StaticArticleData {
+    let static_article_info: &'static StaticArticleData = Box::leak(Box::new(StaticArticleData {
         descriptors: ptr,
         count,
     }));
+
+    KIRBY_COPY_DATA_CACHE.write().insert(kind, static_article_info);
 
     ctx.registers[store_reg].set_x(static_article_info as *const StaticArticleData as u64);
 }
