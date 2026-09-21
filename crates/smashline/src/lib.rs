@@ -54,8 +54,8 @@ pub struct AgentEntry {
 }
 impl AgentEntry {
     pub fn new(agent: u64, costume: Costume) -> Self {
-        Self { 
-            hash: agent, 
+        Self {
+            hash: agent,
             costume_data: costume.as_slice().to_vec()
         }
     }
@@ -414,10 +414,9 @@ decl_imports! {
     );
 
     fn smashline_clone_weapon(
-        original_owner: StringFFI,
+        owner_name: StringFFI,
+        article_name: StringFFI,
         original_article_id: i32,
-        new_owner: StringFFI,
-        new_name: StringFFI,
         use_original_code: bool
     ) -> i32;
 
@@ -457,17 +456,15 @@ pub fn original_status<L: StatusLineMarker, T>(
 }
 
 pub fn clone_weapon(
-    original_owner: impl Into<String>,
+    owner_name: impl Into<String>,
+    article_name: impl Into<String>,
     original_article_id: i32,
-    new_owner: impl Into<String>,
-    new_name: impl Into<String>,
     use_original_code: bool,
 ) -> i32 {
     smashline_clone_weapon(
-        StringFFI::from_str(original_owner),
+        StringFFI::from_str(owner_name),
+        StringFFI::from_str(article_name),
         original_article_id,
-        StringFFI::from_str(new_owner),
-        StringFFI::from_str(new_name),
         use_original_code,
     )
 }

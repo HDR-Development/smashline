@@ -8,13 +8,13 @@ use skyline::hooks::InlineCtx;
 use smashline::{skyline_smash::app::BattleObjectModuleAccessor, Hash40};
 
 pub struct NewAgent {
-    pub old_owner_id: i32,
+    pub article_id: i32,
     pub owner_id: i32,
-    pub owner_name_ffi: String,
-    pub new_name_ffi: String,
+    pub article_name: String,
     pub owner_name: String,
-    pub new_name: String,
-    pub old_name: String,
+    pub original_article_id: i32,
+    pub original_owner_id: i32,
+    pub original_article_name: String,
     pub use_original_code: bool,
 }
 
@@ -23,22 +23,20 @@ pub struct NewArticle {
     pub weapon_id: i32,
 }
 
+pub const VANILLA_WEAPON_COUNT: usize = 0x267;
+
 pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
-pub static NEW_AGENTS: RwLock<BTreeMap<i32, Vec<NewAgent>>> = RwLock::new(BTreeMap::new());
-pub static IGNORE_NEW_AGENTS: AtomicBool = AtomicBool::new(false);
+pub static NEW_AGENTS: RwLock<Vec<NewAgent>> = RwLock::new(Vec::new());
 
 pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
 
 pub fn try_get_new_agent(
-    map: &BTreeMap<i32, Vec<NewAgent>>,
-    weapon: i32,
-    owner: i32,
+    new_agents: &Vec<NewAgent>,
+    weapon: i32
 ) -> Option<&NewAgent> {
-    map.get(&weapon)
-        .and_then(|v| v.iter().find(|a| a.owner_id == owner))
+    let index = weapon as usize - VANILLA_WEAPON_COUNT;
+    new_agents.get(index)
 }
-
-pub static CURRENT_OWNER_KIND: AtomicI32 = AtomicI32::new(-1);
 
 pub static IS_KIRBY_COPYING: AtomicBool = AtomicBool::new(false);
 pub static CURRENT_KIRBY_COPY: AtomicI32 = AtomicI32::new(-1);
@@ -194,13 +192,8 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
 }
 
 fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
+    let new_agents = NEW_AGENTS.read();
+    let Some(agent) = try_get_new_agent(&new_agents, unsafe { ctx.registers[source_register].x() as i32 }) else {
         return;
     };
 
@@ -210,34 +203,24 @@ fn weapon_owner_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: 
 }
 
 fn weapon_owner_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
+    let new_agents = NEW_AGENTS.read();
+    let Some(agent) = try_get_new_agent(&new_agents, unsafe { ctx.registers[source_register].x() as i32 }) else {
         return;
     };
 
     unsafe {
-        ctx.registers[dst_register].set_x(agent.owner_name_ffi.as_ptr() as u64);
+        ctx.registers[dst_register].set_x(agent.owner_name.as_ptr() as u64);
     }
 }
 
 fn weapon_name_hook(ctx: &mut InlineCtx, source_register: usize, dst_register: usize) {
-    if IGNORE_NEW_AGENTS.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let owner = CURRENT_OWNER_KIND.load(Ordering::Relaxed);
-    let agents = NEW_AGENTS.read();
-    let Some(agent) = try_get_new_agent(&agents, unsafe { ctx.registers[source_register].x() as i32 }, owner) else {
+    let new_agents = NEW_AGENTS.read();
+    let Some(agent) = try_get_new_agent(&new_agents, unsafe { ctx.registers[source_register].x() as i32 }) else {
         return;
     };
 
     unsafe {
-        ctx.registers[dst_register].set_x(agent.new_name_ffi.as_ptr() as u64);
+        ctx.registers[dst_register].set_x(agent.article_name.as_ptr() as u64);
     }
 }
 
@@ -251,6 +234,9 @@ macro_rules! decl_hooks {
         )*
 
         fn $install_fn() {
+            $(
+                let _ = skyline::patching::Patch::in_text($offset).nop();
+            )*
             skyline::install_hooks!(
                 $(
                     $name,

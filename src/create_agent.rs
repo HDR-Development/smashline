@@ -23,7 +23,7 @@ use smashline::{
 use vtables::{CustomDataAccessError, VirtualClass};
 
 use crate::{
-    cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
+    interpreter::LoadedScript,
     static_accessor::StaticArrayAccessor, callbacks::{CALLBACKS, StatusCallbackFunction}
 };
 
@@ -580,14 +580,14 @@ fn create_agent_hook(
             {
                 (agent, None)
             } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
+                println!("[smashline::create_agent] Loading nro for fighter ID {:#x}", fighter_id);
                 crate::utils::load_fighter_module(fighter_id);
                 while !crate::utils::is_fighter_module_loaded(fighter_id) {
                     std::thread::sleep(Duration::from_millis(1));
                 }
+                println!("[smashline::create_agent] Finished loading nro for fighter ID {:#x}", fighter_id);
 
-                IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
                 let result = original.call(object, boma, lua_state);
-                IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
 
                 if let Some(agent) = result {
                     (agent, Some(fighter_id))
@@ -1077,14 +1077,14 @@ fn create_agent_status_weapon(
         if let Some(agent) = call_original!(object, boma, lua_state) {
             (false, agent, None)
         } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
+            println!("[smashline::create_agent] Loading nro for fighter ID {:#x}", fighter_id);
             crate::utils::load_fighter_module(fighter_id);
             while !crate::utils::is_fighter_module_loaded(fighter_id) {
                 std::thread::sleep(Duration::from_millis(1));
             }
+            println!("[smashline::create_agent] Finished loading nro for fighter ID {:#x}", fighter_id);
 
-            IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
             let result = call_original!(object, boma, lua_state);
-            IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
 
             if let Some(agent) = result {
                 (false, agent, Some(fighter_id))

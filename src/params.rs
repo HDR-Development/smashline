@@ -363,11 +363,11 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
     let new_agents = NEW_AGENTS.read();
     if let Some(articles) = new_articles.get(&fighter_id) {
         for article in articles.iter() {
-            if let Some(agent) = try_get_new_agent(&new_agents, article.weapon_id, fighter_id) {
-                allowed_names.push(Hash40::new(&format!("param_{}", agent.new_name)).0);
+            if let Some(agent) = try_get_new_agent(&new_agents, article.weapon_id) {
+                allowed_names.push(Hash40::new(&format!("param_{}", agent.article_name)).0);
                 remap_names.insert(
-                    Hash40::new(&format!("param_{}", agent.old_name)).0,
-                    Hash40::new(&format!("param_{}", agent.new_name)).0,
+                    Hash40::new(&format!("param_{}", agent.original_article_name)).0,
+                    Hash40::new(&format!("param_{}", agent.article_name)).0,
                 );
             }
         }
