@@ -112,6 +112,108 @@ fn extend_deque(deque: *mut MyDeque);
 extern "C" {
     #[link_name = "_ZN2nn2os11SignalEventEPNS0_9EventTypeE"]
     fn signal_event(event: u64);
+
+    #[link_name = "_ZNSt3__115recursive_mutex4lockEv"]
+    fn recursive_mutex_lock(mutex: *mut u8);
+
+    #[link_name = "_ZNSt3__115recursive_mutex6unlockEv"]
+    fn recursive_mutex_unlock(mutex: *mut u8);
+}
+
+/// Size of the game's module record: an `nn::ro::Module` followed by the manager's own fields.
+const MODULE_ALLOC_SIZE: usize = 0x138;
+
+/// Offset of the `u16` name length the game stores after the name buffer.
+const MODULE_NAME_LEN_OFFSET: usize = 0x130;
+
+/// Offset of the `isLoaded` byte, set by the manager's worker thread once `nn::ro::LoadModule` succeeds.
+const MODULE_IS_LOADED_OFFSET: usize = 0x132;
+
+/// Offset of the "unload pending" flag byte. The worker thread refuses to load a module whose flag
+/// is set, so it must be explicitly cleared on a freshly created record.
+const MODULE_UNLOAD_PENDING_OFFSET: usize = 0x133;
+
+/// Offset of the manager's reference count for the module.
+const MODULE_REFCOUNT_OFFSET: usize = 0x134;
+
+/// The manager's `std::recursive_mutex`, which guards both the module tree and the command deque.
+const MANAGER_MUTEX_OFFSET: usize = 0x60;
+
+type ModuleTree = smash::cpp::Tree<Hash40, *mut skyline::nn::ro::Module>;
+
+struct ManagerLock(*mut u8);
+
+impl ManagerLock {
+    unsafe fn acquire(manager: *mut u64) -> Self {
+        let mutex = (manager as *mut u8).add(MANAGER_MUTEX_OFFSET);
+        recursive_mutex_lock(mutex);
+        Self(mutex)
+    }
+}
+
+impl Drop for ManagerLock {
+    fn drop(&mut self) {
+        unsafe { recursive_mutex_unlock(self.0) };
+    }
+}
+
+/// Allocates and initializes a module record the same way the game's inlined loader does.
+///
+/// The record is zero-initialized so that every field the worker thread inspects (most importantly
+/// the unload-pending flag, which lives in what Rust considers padding of `nn::ro::Module`) has a
+/// defined value.
+unsafe fn new_module_record(name: &str) -> *mut skyline::nn::ro::Module {
+    // Same alignment the game requests for this record. The worker thread frees it with the game's
+    // own deallocator, which shares the jemalloc heap with skyline's global allocator.
+    let layout = std::alloc::Layout::from_size_align(MODULE_ALLOC_SIZE, 0x10).unwrap();
+    let record = std::alloc::alloc_zeroed(layout);
+    if record.is_null() {
+        std::alloc::handle_alloc_error(layout);
+    }
+
+    let name_bytes = name.as_bytes();
+    let module = record as *mut skyline::nn::ro::Module;
+    let name_dst = std::ptr::addr_of_mut!((*module).Name).cast::<u8>();
+    std::ptr::copy_nonoverlapping(name_bytes.as_ptr(), name_dst, name_bytes.len().min(0xFF));
+    record
+        .add(MODULE_NAME_LEN_OFFSET)
+        .cast::<u16>()
+        .write_unaligned(name_bytes.len() as u16);
+    *record.add(MODULE_IS_LOADED_OFFSET) = 0;
+    *record.add(MODULE_UNLOAD_PENDING_OFFSET) = 0;
+    record
+        .add(MODULE_REFCOUNT_OFFSET)
+        .cast::<i32>()
+        .write_unaligned(1);
+
+    module
+}
+
+/// Pushes a command onto the manager's deque and wakes the worker thread.
+///
+/// Must be called with the manager lock held.
+unsafe fn push_manager_command(manager: *mut u64, command: Command) {
+    let deque = &mut *(manager.add(0x80 / 8) as *mut MyDeque);
+
+    // Mirrors libc++'s deque::push_back, which measures the map from `begin`, not `start`.
+    let capacity = if deque.end != deque.begin {
+        deque.end.offset_from(deque.begin) as usize * 0x100 - 1
+    } else {
+        0
+    };
+
+    if deque.start_index + deque.len == capacity {
+        extend_deque(deque);
+    }
+
+    let next_index = deque.start_index + deque.len;
+    *(*deque.begin.add(next_index / 0x100)).add(next_index & 0xFF) = command;
+    deque.len += 1;
+
+    let event = **(manager.add(0x50 / 8) as *const *const u64);
+    if event != 0 {
+        signal_event(event);
+    }
 }
 
 /// Loads a fighter module via the game's internal methods
@@ -128,65 +230,30 @@ pub fn load_fighter_module(kind: i32) {
         return;
     };
 
-    // Step 2: Insert the module or inc ref count
-    let module = unsafe {
-        let tree = manager.add(0x38 / 8) as *mut smash::cpp::Tree<Hash40, *mut skyline::nn::ro::Module>;
+    unsafe {
+        let _lock = ManagerLock::acquire(manager);
+
+        // Step 3: Insert the module or inc ref count
+        let tree = manager.add(0x38 / 8) as *mut ModuleTree;
 
         if let Some(module) = (*tree).get_mut(&Hash40::new(name)) {
-            *(*module as *mut u64 as *mut i32).add(0x134 / 4) += 1;
+            let refcount = (*module as *mut u8).add(MODULE_REFCOUNT_OFFSET).cast::<i32>();
+            refcount.write_unaligned(refcount.read_unaligned() + 1);
             return;
         }
 
-        load_file(format!("prebuilt:/nro/release/lua2cpp_{name}.nro"));
-
-        let mut module_name = [0u8; 0x100];
-        module_name[..name.len()].copy_from_slice(name.as_bytes());
-
-        let module = Box::leak(Box::new(skyline::nn::ro::Module {
-            ModuleObject: std::ptr::null_mut(),
-            State: 0,
-            NroPtr: std::ptr::null_mut(),
-            BssPtr: std::ptr::null_mut(),
-            _x20: std::ptr::null_mut(),
-            SourceBuffer: std::ptr::null_mut(),
-            Name: module_name,
-            _x130: 0,
-            _x131: 0,
-            isLoaded: false
-        })) as *mut _;
-
-        // Safe bc Module is aligned to 0x8 and so the size is 0x138
-        *(module as *mut u32).add(0x134 / 4) = 1;
-
+        let module = new_module_record(name);
         (*tree).insert(Hash40::new(name), module);
-        module
-    };
 
-    // Step 3: Send command to manager that we want to load a module
-    unsafe {
-        let deque = &mut *(manager.add(0x80 / 8) as *mut MyDeque);
-        let distance = if deque.end.offset_from(deque.start) != 0 {
-            deque.end.offset_from(deque.start) * 0x100 - 1
-        } else {
-            0
-        };
-
-        let next_index = deque.start_index + deque.len;
-        if (deque.start_index + deque.len) as isize == distance {
-            extend_deque(deque);
-        }
-
-        *(*deque.start.add(next_index / 0x100)).add(next_index & 0xFF) = Command {
-            id: 3,
-            arg: module as u64
-        };
-
-        deque.len += 1;
-    }
-
-    // Step 4: Signal event
-    unsafe {
-        signal_event(**(manager.add(0x50 / 8) as *const *const u64));
+        // Step 4: Send command to manager that we want to load a module. The worker thread
+        // resolves and loads the NRO file itself.
+        push_manager_command(
+            manager,
+            Command {
+                id: 3,
+                arg: module as u64,
+            },
+        );
     }
 }
 
@@ -218,9 +285,13 @@ pub fn is_fighter_module_loaded(id: i32) -> bool {
 
     let manager = dynamic_module_manager();
     unsafe {
-        let tree = manager.add(0x38 / 8) as *const smash::cpp::Tree<Hash40, *mut skyline::nn::ro::Module>;
+        let _lock = ManagerLock::acquire(manager);
+        let tree = manager.add(0x38 / 8) as *const ModuleTree;
 
-        (*tree).get(&Hash40::new(name)).map(|x| (**x).isLoaded).unwrap_or_default()
+        (*tree)
+            .get(&Hash40::new(name))
+            .map(|module| *(*module as *const u8).add(MODULE_IS_LOADED_OFFSET) & 1 != 0)
+            .unwrap_or_default()
     }
 }
 

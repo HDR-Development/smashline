@@ -592,6 +592,7 @@ fn create_agent_hook(
                 if let Some(agent) = result {
                     (agent, Some(fighter_id))
                 } else {
+                    crate::utils::unload_fighter_module(fighter_id);
                     let mut agent = Box::new(std::mem::MaybeUninit::zeroed());
                     unsafe {
                         fighter_animcmd_base_ctor(agent.as_mut_ptr(), object, boma, lua_state);
