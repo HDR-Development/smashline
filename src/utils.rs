@@ -257,6 +257,53 @@ pub fn load_fighter_module(kind: i32) {
 #[skyline::from_offset(0x22b6f60)]
 fn dynamic_module_manager_unload(manager: *mut u64, name: &Hash40);
 
+#[skyline::hook(offset = 0x17e4900)]
+fn load_fighter_code_module_hook(loader: *mut u8, kind: i32) -> *mut u8 {
+    let result = call_original!(loader, kind);
+
+    if kind >= 0 {
+        for dependency in crate::cloning::weapons::code_dependencies_of(kind) {
+            println!("[smashline::modules] Fighter {:#x} borrows code from fighter {:#x}, loading its module", kind, dependency);
+            load_fighter_module(dependency);
+        }
+    }
+
+    result
+}
+
+#[skyline::hook(offset = 0x22b6f60)]
+fn dynamic_module_manager_unload_hook(manager: *mut u64, name: &Hash40) -> u64 {
+    let name = *name;
+    let result = call_original!(manager, &name);
+
+    let dependents: Vec<i32> = crate::cloning::weapons::NEW_AGENTS
+        .read()
+        .iter()
+        .filter(|agent| agent.use_original_code && agent.original_owner_id != agent.owner_id)
+        .map(|agent| agent.owner_id)
+        .collect();
+
+    for owner in dependents {
+        let Some(owner_name) = LOWERCASE_FIGHTER_NAMES.get(owner as usize) else {
+            continue;
+        };
+        if Hash40::new(owner_name) != name {
+            continue;
+        }
+        for dependency in crate::cloning::weapons::code_dependencies_of(owner) {
+            println!("[smashline::modules] Fighter {:#x} unloaded, releasing borrowed module of fighter {:#x}", owner, dependency);
+            unload_fighter_module(dependency);
+        }
+        break;
+    }
+
+    result
+}
+
+pub fn install_module_hooks() {
+    skyline::install_hooks!(load_fighter_code_module_hook, dynamic_module_manager_unload_hook);
+}
+
 pub fn unload_fighter_module(id: i32) {
     if id < 0 {
         return;

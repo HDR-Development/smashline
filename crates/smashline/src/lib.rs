@@ -418,7 +418,7 @@ decl_imports! {
         article_name: StringFFI,
         original_article_id: i32,
         use_original_code: bool
-    ) -> i32;
+    ) -> CloneWeapon;
 
     fn smashline_update_weapon_count(
         article_id: i32,
@@ -455,12 +455,18 @@ pub fn original_status<L: StatusLineMarker, T>(
     }
 }
 
+#[repr(C)]
+pub struct CloneWeapon {
+    pub generate_id_add: i32,
+    pub weapon_id: i32
+}
+
 pub fn clone_weapon(
     owner_name: impl Into<String>,
     article_name: impl Into<String>,
     original_article_id: i32,
     use_original_code: bool,
-) -> i32 {
+) -> CloneWeapon {
     smashline_clone_weapon(
         StringFFI::from_str(owner_name),
         StringFFI::from_str(article_name),

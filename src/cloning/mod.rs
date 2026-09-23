@@ -21,5 +21,6 @@ fn fighter_initialize_object_data(
 pub fn install() {
     // fighters::install();
     weapons::install();
+    crate::utils::install_module_hooks();
     skyline::install_hooks!(fighter_initialize_object_data);
 }
