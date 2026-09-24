@@ -298,7 +298,7 @@ pub extern "C" fn smashline_reload_script(
 
 #[repr(C)]
 pub struct CloneWeapon {
-    pub generate_id_add: i32,
+    pub generate_id: i32,
     pub weapon_id: i32
 }
 
@@ -377,7 +377,7 @@ pub extern "C" fn smashline_clone_weapon(
         generate_count + generate_add
     );
     CloneWeapon {
-        generate_id_add: generate_count + generate_add,
+        generate_id: generate_count + generate_add,
         weapon_id: article_id
     }
 }

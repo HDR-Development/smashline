@@ -458,7 +458,7 @@ pub fn original_status<L: StatusLineMarker, T>(
 
 #[repr(C)]
 pub struct CloneWeapon {
-    pub generate_id_add: i32,
+    pub generate_id: i32,
     pub weapon_id: i32
 }
 
