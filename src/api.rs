@@ -10,7 +10,7 @@ use smashline::{
 };
 
 use crate::{
-    callbacks::{StatusCallback, StatusCallbackFunction}, cloning::weapons::{NewAgent, NewArticle, VANILLA_WEAPON_COUNT}, create_agent::{
+    callbacks::{StatusCallback, StatusCallbackFunction}, cloning::weapons::{MAX_GENERATE_ARTICLE_IDS, NewAgent, NewArticle, VANILLA_WEAPON_COUNT}, create_agent::{
         AcmdScript, LOWERCASE_FIGHTER_NAMES, LOWERCASE_WEAPON_NAMES, LOWERCASE_WEAPON_OWNER_NAMES, StatusScript, StatusScriptFunction
     }, state_callback::{StateCallback, StateCallbackFunction},
 };
@@ -361,7 +361,6 @@ pub extern "C" fn smashline_clone_weapon(
         }
     );
 
-    let id = articles.len();
     articles.push(NewArticle {
         original_owner: original_owner_id as i32,
         original_weapon_id: original_article_id,
@@ -370,8 +369,15 @@ pub extern "C" fn smashline_clone_weapon(
 
     crate::cloning::weapons::invalidate_article_cache();
 
+    let generate_count = *MAX_GENERATE_ARTICLE_IDS.get(owner_id as usize).unwrap();
+    let generate_add = articles.len() as i32;
+    println!(
+        "[smashline::cloning] Article has been cloned with Weapon ID {:#x} and Generate Id {}",
+        article_id,
+        generate_count + generate_add
+    );
     CloneWeapon {
-        generate_id_add: id as i32,
+        generate_id_add: generate_count + generate_add,
         weapon_id: article_id
     }
 }
