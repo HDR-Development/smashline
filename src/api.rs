@@ -369,7 +369,7 @@ pub extern "C" fn smashline_clone_weapon(
 
     crate::cloning::weapons::invalidate_article_cache();
 
-    let generate_count = *MAX_GENERATE_ARTICLE_IDS.get(owner_id as usize).unwrap();
+    let generate_count = MAX_GENERATE_ARTICLE_IDS[owner_id as usize];
     let generate_add = articles.len() as i32;
     println!(
         "[smashline::cloning] Article has been cloned with Weapon ID {:#x} and Generate Id {}",
