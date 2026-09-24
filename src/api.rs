@@ -378,12 +378,15 @@ pub extern "C" fn smashline_clone_weapon(
 
 #[no_mangle]
 pub extern "C" fn smashline_update_weapon_count(
-    article_id: i32,
+    fighter_id: i32,
+    generate_article_id: i32,
     new_count: i32
 ) {
     *crate::cloning::weapons::WEAPON_COUNT_UPDATE
         .write()
-        .entry(article_id)
+        .entry(fighter_id)
+        .or_default()
+        .entry(generate_article_id)
         .or_default() = new_count;
 
     crate::cloning::weapons::invalidate_article_cache();
@@ -392,19 +395,19 @@ pub extern "C" fn smashline_update_weapon_count(
 #[no_mangle]
 pub extern "C" fn smashline_whitelist_kirby_copy_article(
     fighter_id: i32,
-    article_id: i32
+    generate_article_id: i32
 ) {
     let mut copy_whitelist = crate::cloning::weapons::KIRBY_COPY_ARTICLE_WHITELIST.write();
     if let Some(whitelist) = copy_whitelist.get_mut(&fighter_id) {
-        if whitelist.contains(&article_id) {
-            println!("Copy Whitelist already contains fighter {:#x} article {:#x}!", fighter_id, article_id);
+        if whitelist.contains(&generate_article_id) {
+            println!("Copy Whitelist already contains fighter {:#x} article {:#x}!", fighter_id, generate_article_id);
         }
         else {
-            whitelist.push(article_id);
+            whitelist.push(generate_article_id);
         }
     }
     else {
-        copy_whitelist.insert(fighter_id, vec![article_id]);
+        copy_whitelist.insert(fighter_id, vec![generate_article_id]);
     }
 
     crate::cloning::weapons::invalidate_article_cache();

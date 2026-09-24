@@ -35,7 +35,7 @@ pub const VANILLA_WEAPON_COUNT: usize = 0x267;
 pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
 pub static NEW_AGENTS: RwLock<Vec<NewAgent>> = RwLock::new(Vec::new());
 
-pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, i32>> = RwLock::new(BTreeMap::new());
+pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, BTreeMap<i32, i32>>> = RwLock::new(BTreeMap::new());
 
 pub fn try_get_new_agent(
     new_agents: &Vec<NewAgent>,
@@ -202,10 +202,6 @@ impl StaticArticleData {
 
 #[skyline::hook(offset = 0x64b730)]
 fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
-    if IS_KIRBY_COPYING.load(Ordering::Relaxed) {
-        return call_original!(kind);
-    }
-
     if let Some(cached) = FIGHTER_DATA_CACHE.read().get(&kind) {
         return *cached as *const StaticFighterData;
     }
@@ -215,13 +211,6 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     let mut new_descriptors = vec![];
 
     new_descriptors.extend_from_slice(unsafe { (*original_data).articles_as_slice() });
-
-    for article in new_descriptors.iter_mut() {
-        let weapon_count = WEAPON_COUNT_UPDATE.read();
-        if let Some(new_count) = weapon_count.get(&article.weapon_id) {
-            article.max_count = *new_count;
-        }
-    }
 
     if let Some(new_articles) = NEW_ARTICLES.read().get(&kind) {
 
@@ -235,6 +224,14 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
                 article.weapon_id = new_article.new_weapon_id;
 
                 new_descriptors.push(article);
+            }
+        }
+    }
+
+    if let Some(count_updates) = WEAPON_COUNT_UPDATE.read().get(&kind) {
+        for (index, article) in new_descriptors.iter_mut().enumerate() {
+            if let Some(new_count) = count_updates.get(&(index as i32)) {
+                article.max_count = *new_count;
             }
         }
     }
@@ -465,56 +462,47 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     }
 
     let kirby_copy_whitelist = KIRBY_COPY_ARTICLE_WHITELIST.read();
-    // println!("Fighter {:#x} is in the whitelist!", kind);
-    let original_descriptors = ctx.registers[store_reg].x() as *const StaticArticleData;
-    IS_KIRBY_COPYING.store(true, Ordering::Relaxed);
+
+    let kirby_descriptors = ctx.registers[store_reg].x() as *const StaticArticleData;
+
     let fighter_data = get_static_fighter_data(kind);
     CURRENT_KIRBY_COPY.store(-1, Ordering::Relaxed);
-    IS_KIRBY_COPYING.store(false, Ordering::Relaxed);
 
-    let mut new_descriptors = vec![];
+    let mut new_descriptors: Vec<ArticleDescriptor> = (*kirby_descriptors).articles_as_slice().to_vec();
+    let fighter_articles: Vec<ArticleDescriptor> = (*fighter_data).articles_as_slice().to_vec();
 
-    for article in  (*original_descriptors).articles_as_slice().iter() {
-        new_descriptors.push(*article);
-    }
+    let whitelist = kirby_copy_whitelist.get(&kind);
 
-    if let Some(whitelist) = kirby_copy_whitelist.get(&kind) {
-        for article in (*fighter_data).articles_as_slice().iter() {
-            // New Handling to add any missing StaticArticleData to Kirby
-            let mut contains_article = false;
-            for descriptor in new_descriptors.iter_mut() {
-                // If the ArticleData exists...
-                if article.weapon_id == descriptor.weapon_id {
-                    // Set contains_article to true.
-                    contains_article = true;
-                    if whitelist.contains(&article.weapon_id) {
-                        *descriptor = *article;
-                    }
-                    break;
+    for (index, article) in fighter_articles.iter().enumerate() {
+        let generate_article_id = index as i32;
+        let whitelisted = whitelist.map_or(false, |list| list.contains(&generate_article_id));
+
+        match new_descriptors.iter().position(|d| d.weapon_id == article.weapon_id) {
+            // Kirby already has this article; a whitelisted entry takes the fighter's full descriptor.
+            Some(position) => {
+                if whitelisted {
+                    new_descriptors[position] = *article;
                 }
             }
-            if !contains_article {
-                if whitelist.contains(&article.weapon_id) {
-                    new_descriptors.push(*article);
+            // Kirby lacks this article. Only fighters with a whitelist get missing entries appended.
+            None => {
+                if whitelist.is_none() {
+                    continue;
                 }
-                else {
-                    new_descriptors.push(ArticleDescriptor{
+                if whitelisted {
+                    new_descriptors.push(*article);
+                } else {
+                    // Placeholder with no callbacks; never give it a count.
+                    new_descriptors.push(ArticleDescriptor {
                         weapon_id: article.weapon_id,
                         max_count: 0,
-                        on_init_callback: unsafe { std::mem::transmute(0u64) },
-                        on_fini_callback: unsafe { std::mem::transmute(0u64) },
-                        extra: 0
-                    })
+                        on_init_callback: std::mem::transmute(0u64),
+                        on_fini_callback: std::mem::transmute(0u64),
+                        extra: 0,
+                    });
+                    continue;
                 }
             }
-        }
-    }
-
-    for article in new_descriptors.iter_mut() {
-        // println!("checking count for article id {:#x}", article.weapon_id);
-        let weapon_count = WEAPON_COUNT_UPDATE.read();
-        if let Some(new_count) = weapon_count.get(&article.weapon_id) {
-            article.max_count = *new_count;
         }
     }
 

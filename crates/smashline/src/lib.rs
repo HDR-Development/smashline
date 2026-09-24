@@ -421,7 +421,8 @@ decl_imports! {
     ) -> CloneWeapon;
 
     fn smashline_update_weapon_count(
-        article_id: i32,
+        fighter_id: i32,
+        generate_article_id: i32,
         new_count: i32
     );
 
@@ -432,7 +433,7 @@ decl_imports! {
 
     fn smashline_whitelist_kirby_copy_article(
         fighter_id: i32,
-        article_id: i32
+        generate_article_id: i32
     );
 }
 
@@ -476,11 +477,13 @@ pub fn clone_weapon(
 }
 
 pub fn update_weapon_count(
-    article_id: i32,
+    fighter_id: i32,
+    generate_article_id: i32,
     new_count: i32
 ) {
     smashline_update_weapon_count(
-        article_id,
+        fighter_id,
+        generate_article_id,
         new_count
     );
 }
@@ -489,8 +492,8 @@ pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
     smashline_add_param_object(StringFFI::from_str(fighter), StringFFI::from_str(object));
 }
 
-pub fn whitelist_kirby_copy_article(fighter_id: i32, article_id: i32) {
-    smashline_whitelist_kirby_copy_article(fighter_id, article_id);
+pub fn whitelist_kirby_copy_article(fighter_id: i32, generate_article_id: i32) {
+    smashline_whitelist_kirby_copy_article(fighter_id, generate_article_id);
 }
 
 pub mod api {
