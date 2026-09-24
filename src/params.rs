@@ -363,7 +363,8 @@ unsafe fn init_fighter_p_object(ctx: &InlineCtx) {
     let new_agents = NEW_AGENTS.read();
     if let Some(articles) = new_articles.get(&fighter_id) {
         for article in articles.iter() {
-            if let Some(agent) = try_get_new_agent(&new_agents, article.original_weapon_id) {
+            if let Some(agent) = try_get_new_agent(&new_agents, article.new_weapon_id) {
+                println!("[smashline::params] Adding param remap for {}_{}", agent.owner_name, agent.article_name);
                 allowed_names.push(Hash40::new(&format!("param_{}", agent.article_name)).0);
                 remap_names.insert(
                     Hash40::new(&format!("param_{}", agent.original_article_name)).0,
