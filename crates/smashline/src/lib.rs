@@ -54,8 +54,8 @@ pub struct AgentEntry {
 }
 impl AgentEntry {
     pub fn new(agent: u64, costume: Costume) -> Self {
-        Self { 
-            hash: agent, 
+        Self {
+            hash: agent,
             costume_data: costume.as_slice().to_vec()
         }
     }
@@ -414,15 +414,15 @@ decl_imports! {
     );
 
     fn smashline_clone_weapon(
-        original_owner: StringFFI,
+        owner_name: StringFFI,
+        article_name: StringFFI,
         original_article_id: i32,
-        new_owner: StringFFI,
-        new_name: StringFFI,
         use_original_code: bool
-    ) -> i32;
+    ) -> CloneWeapon;
 
     fn smashline_update_weapon_count(
-        article_id: i32,
+        fighter_id: i32,
+        generate_article_id: i32,
         new_count: i32
     );
 
@@ -433,7 +433,7 @@ decl_imports! {
 
     fn smashline_whitelist_kirby_copy_article(
         fighter_id: i32,
-        article_id: i32
+        generate_article_id: i32
     );
 }
 
@@ -456,28 +456,34 @@ pub fn original_status<L: StatusLineMarker, T>(
     }
 }
 
+#[repr(C)]
+pub struct CloneWeapon {
+    pub generate_id: i32,
+    pub weapon_id: i32
+}
+
 pub fn clone_weapon(
-    original_owner: impl Into<String>,
+    owner_name: impl Into<String>,
+    article_name: impl Into<String>,
     original_article_id: i32,
-    new_owner: impl Into<String>,
-    new_name: impl Into<String>,
     use_original_code: bool,
-) -> i32 {
+) -> CloneWeapon {
     smashline_clone_weapon(
-        StringFFI::from_str(original_owner),
+        StringFFI::from_str(owner_name),
+        StringFFI::from_str(article_name),
         original_article_id,
-        StringFFI::from_str(new_owner),
-        StringFFI::from_str(new_name),
         use_original_code,
     )
 }
 
 pub fn update_weapon_count(
-    article_id: i32,
+    fighter_id: i32,
+    generate_article_id: i32,
     new_count: i32
 ) {
     smashline_update_weapon_count(
-        article_id,
+        fighter_id,
+        generate_article_id,
         new_count
     );
 }
@@ -486,8 +492,8 @@ pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
     smashline_add_param_object(StringFFI::from_str(fighter), StringFFI::from_str(object));
 }
 
-pub fn whitelist_kirby_copy_article(fighter_id: i32, article_id: i32) {
-    smashline_whitelist_kirby_copy_article(fighter_id, article_id);
+pub fn whitelist_kirby_copy_article(fighter_id: i32, generate_article_id: i32) {
+    smashline_whitelist_kirby_copy_article(fighter_id, generate_article_id);
 }
 
 pub mod api {

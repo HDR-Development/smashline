@@ -10,13 +10,9 @@ use smashline::{
 };
 
 use crate::{
-    callbacks::{StatusCallback, StatusCallbackFunction},
-    cloning::weapons::{NewAgent, NewArticle},
-    create_agent::{
-        AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
-        LOWERCASE_WEAPON_NAMES
-    },
-    state_callback::{StateCallback, StateCallbackFunction},
+    callbacks::{StatusCallback, StatusCallbackFunction}, cloning::weapons::{MAX_GENERATE_ARTICLE_IDS, NewAgent, NewArticle, VANILLA_WEAPON_COUNT}, create_agent::{
+        AcmdScript, LOWERCASE_FIGHTER_NAMES, LOWERCASE_WEAPON_NAMES, LOWERCASE_WEAPON_OWNER_NAMES, StatusScript, StatusScriptFunction
+    }, state_callback::{StateCallback, StateCallbackFunction},
 };
 
 fn mark_costume(
@@ -300,94 +296,103 @@ pub extern "C" fn smashline_reload_script(
     );
 }
 
+#[repr(C)]
+pub struct CloneWeapon {
+    pub generate_id: i32,
+    pub weapon_id: i32
+}
+
 #[no_mangle]
 pub extern "C" fn smashline_clone_weapon(
-    original_owner: StringFFI,
+    owner_name: StringFFI,
+    article_name: StringFFI,
     original_article_id: i32,
-    new_owner: StringFFI,
-    new_name: StringFFI,
     use_original_code: bool,
-) -> i32 {
-    let original_owner = original_owner.as_str().unwrap().to_string();
-    let new_owner = new_owner.as_str().unwrap().to_string();
-    let new_name = new_name.as_str().unwrap().to_string();
+) -> CloneWeapon {
+    let owner_name = owner_name.as_str().unwrap().to_string();
+    let article_name = article_name.as_str().unwrap().to_string();
+    println!("[smashline::cloning] New weapon {}_{} is being cloned!", owner_name, article_name);
+
+    let owner_id = LOWERCASE_FIGHTER_NAMES
+        .iter()
+        .position(|name| name == owner_name)
+        .unwrap() as i32;
+    println!("[smashline::cloning] Owner ID has been found: {:#x}", owner_id);
+
+    let original_owner_name = LOWERCASE_WEAPON_OWNER_NAMES.get(original_article_id as usize).unwrap();
+
+    let original_article_name = LOWERCASE_WEAPON_NAMES.get(original_article_id as usize).unwrap();
 
     let original_owner_id = LOWERCASE_FIGHTER_NAMES
         .iter()
-        .position(|name| name == original_owner)
-        .unwrap();
-
-    // let original_name_id = LOWERCASE_WEAPON_NAMES
-    //     .iter()
-    //     .position(|name| name == original_name)
-    //     .unwrap();
-
-    let original_name = LOWERCASE_WEAPON_NAMES.get(original_article_id as usize).unwrap();
-
-    let new_owner_id = LOWERCASE_FIGHTER_NAMES
-        .iter()
-        .position(|name| name == new_owner)
-        .unwrap();
+        .position(|name| name == original_owner_name)
+        .unwrap() as i32;
+    println!("[smashline::cloning] The original article being cloned is {}_{}", original_owner_name, original_article_name);
 
     let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
 
     let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
     let articles = new_articles
-        .entry(new_owner_id as i32)
+        .entry(owner_id as i32)
         .or_default();
 
-    if let Some(id) = articles.iter().position(|article|
+    if let Some(_id) = articles.iter().position(|article|
         article.original_owner == original_owner_id as i32 &&
-        article.weapon_id == original_article_id
+        article.original_weapon_id == original_article_id
     ) {
-        return id as i32;
+        panic!("[smashline::cloning] This article name is already cloned on this fighter!");
     }
 
-    for agents in new_agents.values() {
-        if let Some(agent) = agents.iter().find(|agent| 
-            agent.owner_name == new_owner && agent.new_name == new_name
-        ) {
-            let owner = LOWERCASE_FIGHTER_NAMES.get(agent.old_owner_id as usize).unwrap();
-            panic!(
-                "Weapon with the name '{}_{}' has already been cloned, but using '{}_{}' instead of '{}_{}'", 
-                new_owner, new_name, owner, agent.old_name, original_owner, original_name
-            );
+    let new_weapon_count = new_agents.len();
+    let article_id = (VANILLA_WEAPON_COUNT + new_weapon_count) as i32;
+    new_agents.push(
+        NewAgent{
+            article_id,
+            owner_id,
+            article_name_c: std::ffi::CString::new(article_name.as_str()).unwrap(),
+            owner_name_c: std::ffi::CString::new(owner_name.as_str()).unwrap(),
+            original_article_name_c: std::ffi::CString::new(original_article_name).unwrap(),
+            article_name,
+            owner_name,
+            original_article_id,
+            original_owner_id,
+            original_article_name: original_article_name.to_string(),
+            use_original_code
         }
-    }
+    );
 
-    new_agents
-        .entry(original_article_id as i32)
-        .or_default()
-        .push(NewAgent {
-            old_owner_id: original_owner_id as i32,
-            owner_id: new_owner_id as i32,
-            owner_name_ffi: format!("{new_owner}\0"),
-            new_name_ffi: format!("{new_name}\0"),
-            owner_name: new_owner,
-            new_name,
-            old_name: original_name.to_string(),
-            use_original_code,
-        });
-
-    let id = articles.len();
     articles.push(NewArticle {
         original_owner: original_owner_id as i32,
-        weapon_id: original_article_id,
+        original_weapon_id: original_article_id,
+        new_weapon_id: article_id
     });
 
     crate::cloning::weapons::invalidate_article_cache();
 
-    id as i32
+    let generate_count = MAX_GENERATE_ARTICLE_IDS[owner_id as usize];
+    let generate_add = articles.len() as i32;
+    println!(
+        "[smashline::cloning] Article has been cloned with Weapon ID {:#x} and Generate Id {}",
+        article_id,
+        generate_count + generate_add
+    );
+    CloneWeapon {
+        generate_id: generate_count + generate_add,
+        weapon_id: article_id
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn smashline_update_weapon_count(
-    article_id: i32,
+    fighter_id: i32,
+    generate_article_id: i32,
     new_count: i32
 ) {
     *crate::cloning::weapons::WEAPON_COUNT_UPDATE
         .write()
-        .entry(article_id)
+        .entry(fighter_id)
+        .or_default()
+        .entry(generate_article_id)
         .or_default() = new_count;
 
     crate::cloning::weapons::invalidate_article_cache();
@@ -396,19 +401,19 @@ pub extern "C" fn smashline_update_weapon_count(
 #[no_mangle]
 pub extern "C" fn smashline_whitelist_kirby_copy_article(
     fighter_id: i32,
-    article_id: i32
+    generate_article_id: i32
 ) {
     let mut copy_whitelist = crate::cloning::weapons::KIRBY_COPY_ARTICLE_WHITELIST.write();
     if let Some(whitelist) = copy_whitelist.get_mut(&fighter_id) {
-        if whitelist.contains(&article_id) {
-            println!("Copy Whitelist already contains fighter {:#x} article {:#x}!", fighter_id, article_id);
+        if whitelist.contains(&generate_article_id) {
+            println!("Copy Whitelist already contains fighter {:#x} article {:#x}!", fighter_id, generate_article_id);
         }
         else {
-            whitelist.push(article_id);
+            whitelist.push(generate_article_id);
         }
     }
     else {
-        copy_whitelist.insert(fighter_id, vec![article_id]);
+        copy_whitelist.insert(fighter_id, vec![generate_article_id]);
     }
 
     crate::cloning::weapons::invalidate_article_cache();
