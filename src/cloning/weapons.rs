@@ -617,6 +617,28 @@ unsafe fn kirby_get_copy_articles(ctx: &mut InlineCtx, store_reg: usize) {
     ctx.registers[store_reg].set_x(static_article_info as *const StaticArticleData as u64);
 }
 
+#[repr(C)]
+pub struct PocketUIParams {
+    pub category: u8,
+    pub padding: [u8; 3],
+    pub kind: i32,
+    pub type_hash: u64
+}
+
+#[skyline::hook(offset = 0x1422f50)]
+unsafe extern "C" fn get_pocket_ui_param(param_1: *mut PocketUIParams) -> u64 {
+    // println!("category: {}", (*param_1).category);
+    // println!("padding: {:#?}", (*param_1).padding);
+    // println!("kind: {:#x}", (*param_1).kind);
+    // println!("padding2: {:#x}", (*param_1).type_hash);
+    if (*param_1).category == 1
+    && (*param_1).kind >= VANILLA_WEAPON_COUNT as i32 {
+        let kind = original_kind_of((*param_1).kind).unwrap();
+        (*param_1).kind = kind;
+    }
+    original!()(param_1)
+}
+
 pub fn install() {
     install_weapon_name_hooks();
     install_weapon_owner_hooks();
@@ -631,6 +653,7 @@ pub fn install() {
         get_weapon_specializer_hook,
         weapon_init_factory_kind,
         weapon_init_owner_category,
+        get_pocket_ui_param,
     );
 
     install_kirby_copy_kind_hooks();
