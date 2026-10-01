@@ -336,11 +336,21 @@ pub extern "C" fn smashline_clone_weapon(
         .entry(owner_id as i32)
         .or_default();
 
-    if let Some(_id) = articles.iter().position(|article|
+    if let Some(index) = articles.iter().position(|article|
         article.original_owner == original_owner_id as i32 &&
         article.original_weapon_id == original_article_id
     ) {
-        panic!("[smashline::cloning] This article name is already cloned on this fighter!");
+        let weapon_id = articles[index].new_weapon_id;
+        let generate_id = MAX_GENERATE_ARTICLE_IDS[owner_id as usize] + index as i32 + 1;
+        println!(
+            "[smashline::cloning] This article is already cloned on this fighter! Weapon ID {:#x}, Generate Id {}",
+            weapon_id,
+            generate_id
+        );
+        return CloneWeapon {
+            generate_id,
+            weapon_id
+        };
     }
 
     let new_weapon_count = new_agents.len();
