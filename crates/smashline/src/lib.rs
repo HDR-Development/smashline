@@ -309,6 +309,24 @@ impl BattleObjectCategory {
     }
 }
 
+#[repr(C)]
+struct WeaponShootMsg<T> {
+    size: u32,
+    payload: T,
+}
+
+pub unsafe extern "C" fn send_weapon_shoot_msg<T>(weapon: *const u64, payload: T) {
+    let msg = WeaponShootMsg {
+        size: std::mem::size_of::<T>().next_multiple_of(8) as u32,
+        payload,
+    };
+    // vtable slot 0x50 on the weapon
+    let vtable = *(weapon as *const *const u64);
+    let f: extern "C" fn(*const u64, *const WeaponShootMsg<T>) =
+        std::mem::transmute(*vtable.add(0x50 / 8));
+    f(weapon, &msg);
+}
+
 macro_rules! decl_imports {
     ($($V:vis fn $name:ident($($arg:ident: $T:ty),*) $(-> $Ret:ty)?;)*) => {
         $(
@@ -426,6 +444,13 @@ decl_imports! {
         new_count: i32
     );
 
+    fn smashline_replace_article_descriptor_func(
+        fighter_id: i32,
+        generate_article_id: i32,
+        on_init_callback: Option<unsafe extern "C" fn(*mut u64, *mut smash::app::BattleObjectModuleAccessor) -> i32>,
+        on_fini_callback: Option<unsafe extern "C" fn(*mut u64, *mut smash::app::BattleObjectModuleAccessor) -> i32>
+    );
+
     fn smashline_add_param_object(
         fighter_name: StringFFI,
         object: StringFFI
@@ -434,6 +459,12 @@ decl_imports! {
     fn smashline_whitelist_kirby_copy_article(
         fighter_id: i32,
         generate_article_id: i32
+    );
+
+    fn smashline_replace_weapon_vtable(
+        weapon_kind: i32,
+        vtable_slot: usize,
+        vtable_function: usize
     );
 }
 
@@ -488,12 +519,30 @@ pub fn update_weapon_count(
     );
 }
 
+pub fn replace_article_descriptor_func(
+    fighter_id: i32,
+    generate_article_id: i32,
+    on_init_callback: Option<unsafe extern "C" fn(*mut u64, *mut smash::app::BattleObjectModuleAccessor) -> i32>,
+    on_fini_callback: Option<unsafe extern "C" fn(*mut u64, *mut smash::app::BattleObjectModuleAccessor) -> i32>
+) {
+    smashline_replace_article_descriptor_func(
+        fighter_id,
+        generate_article_id,
+        on_init_callback,
+        on_fini_callback
+    );
+}
+
 pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
     smashline_add_param_object(StringFFI::from_str(fighter), StringFFI::from_str(object));
 }
 
 pub fn whitelist_kirby_copy_article(fighter_id: i32, generate_article_id: i32) {
     smashline_whitelist_kirby_copy_article(fighter_id, generate_article_id);
+}
+
+pub fn replace_weapon_vtable(weapon_kind: i32, vtable_slot: usize, vtable_function: usize) {
+    smashline_replace_weapon_vtable(weapon_kind, vtable_slot, vtable_function);
 }
 
 pub mod api {

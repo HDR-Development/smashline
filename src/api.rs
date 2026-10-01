@@ -6,11 +6,11 @@ use std::{
 use acmd_engine::action::ActionRegistry;
 use rtld::Section;
 use smashline::{
-    Acmd, AcmdFunction, AgentEntry, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
+    Acmd, AcmdFunction, AgentEntry, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI, skyline_smash::app::BattleObjectModuleAccessor,
 };
 
 use crate::{
-    callbacks::{StatusCallback, StatusCallbackFunction}, cloning::weapons::{MAX_GENERATE_ARTICLE_IDS, NewAgent, NewArticle, VANILLA_WEAPON_COUNT}, create_agent::{
+    callbacks::{StatusCallback, StatusCallbackFunction}, cloning::weapons::{ArticleDescriptorReplace, MAX_GENERATE_ARTICLE_IDS, NewAgent, NewArticle, VANILLA_WEAPON_COUNT, WEAPON_VTABLE_UPDATE}, create_agent::{
         AcmdScript, LOWERCASE_FIGHTER_NAMES, LOWERCASE_WEAPON_NAMES, LOWERCASE_WEAPON_OWNER_NAMES, StatusScript, StatusScriptFunction
     }, state_callback::{StateCallback, StateCallbackFunction},
 };
@@ -398,12 +398,32 @@ pub extern "C" fn smashline_update_weapon_count(
     generate_article_id: i32,
     new_count: i32
 ) {
-    *crate::cloning::weapons::WEAPON_COUNT_UPDATE
-        .write()
+    let mut descriptors = crate::cloning::weapons::ARTICLE_DESCRIPTOR_REPLACE.write();
+    let descriptor = descriptors
         .entry(fighter_id)
         .or_default()
         .entry(generate_article_id)
-        .or_default() = new_count;
+        .or_insert(ArticleDescriptorReplace::new());
+    descriptor.max_count = Some(new_count);
+
+    crate::cloning::weapons::invalidate_article_cache();
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_replace_article_descriptor_func(
+    fighter_id: i32,
+    generate_article_id: i32,
+    on_init_callback: Option<unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32>,
+    on_fini_callback: Option<unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32>,
+) {
+    let mut descriptors = crate::cloning::weapons::ARTICLE_DESCRIPTOR_REPLACE.write();
+    let descriptor = descriptors
+        .entry(fighter_id)
+        .or_default()
+        .entry(generate_article_id)
+        .or_insert(ArticleDescriptorReplace::new());
+    descriptor.on_init_callback = on_init_callback;
+    descriptor.on_fini_callback = on_fini_callback;
 
     crate::cloning::weapons::invalidate_article_cache();
 }
@@ -425,6 +445,22 @@ pub extern "C" fn smashline_whitelist_kirby_copy_article(
     else {
         copy_whitelist.insert(fighter_id, vec![generate_article_id]);
     }
+
+    crate::cloning::weapons::invalidate_article_cache();
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_replace_weapon_vtable(
+    weapon_kind: i32,
+    vtable_slot: usize,
+    vtable_function: usize
+) {
+    *crate::cloning::weapons::WEAPON_VTABLE_UPDATE
+        .write()
+        .entry(weapon_kind)
+        .or_default()
+        .entry(vtable_slot)
+        .or_default() = vtable_function;
 
     crate::cloning::weapons::invalidate_article_cache();
 }

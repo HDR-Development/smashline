@@ -134,8 +134,6 @@ pub static MAX_GENERATE_ARTICLE_IDS: [i32; 94] = [
 pub static NEW_ARTICLES: RwLock<BTreeMap<i32, Vec<NewArticle>>> = RwLock::new(BTreeMap::new());
 pub static NEW_AGENTS: RwLock<Vec<NewAgent>> = RwLock::new(Vec::new());
 
-pub static WEAPON_COUNT_UPDATE: RwLock<BTreeMap<i32, BTreeMap<i32, i32>>> = RwLock::new(BTreeMap::new());
-
 pub fn try_get_new_agent(
     new_agents: &Vec<NewAgent>,
     weapon: i32
@@ -177,10 +175,47 @@ fn get_static_weapon_data_hook(kind: i32) -> *const u8 {
     call_original!(kind)
 }
 
+pub static WEAPON_VTABLE_UPDATE: RwLock<BTreeMap<i32, BTreeMap<usize, usize>>> = RwLock::new(BTreeMap::new());
+
 #[skyline::hook(offset = 0x33bed40)]
-fn get_weapon_specializer_hook(kind: i32) -> *const u8 {
-    let kind = original_kind_of(kind).unwrap_or(kind);
-    call_original!(kind)
+fn get_weapon_vtable_hook(kind: i32) -> *const usize {
+    if let Some(cached) = WEAPON_VTABLE_CACHE.read().get(&kind) {
+        return *cached as *const WeaponVtable as *const usize;
+    }
+    let original_kind = original_kind_of(kind).unwrap_or(kind);
+    let original_vtable = call_original!(original_kind);
+
+    let weapon_vtable_update = WEAPON_VTABLE_UPDATE.read();
+    let Some(vtable_update) = weapon_vtable_update.get(&kind) else {
+        println!("[smashline::weapons] Weapon Kind {:#x} has no vtable functions to replace!", kind);
+        return original_vtable;
+    };
+    println!("[smashline::weapons] Replacing vtable functions for Weapon Kind {:#x}", kind);
+
+    let vptr = unsafe { *(original_vtable as *const *const usize) };
+    let original_slots = unsafe { std::slice::from_raw_parts(vptr, 104) };
+
+    let mut new_vtable_slots = [0usize; 104];
+
+    unsafe { std::ptr::copy_nonoverlapping(vptr, new_vtable_slots.as_mut_ptr(), 104); }
+
+    for (index, func) in vtable_update.iter() {
+        println!(
+            "[smashline::weapons] Replacing {:#x} Vtable Entry {} with {:#x}",
+            kind,
+            *index,
+            *func
+        );
+        new_vtable_slots[*index] = *func;
+    }
+
+    let patched = Box::leak(Box::new(WeaponVtable {
+        vptr: std::ptr::null(),
+        slots: new_vtable_slots,
+    }));
+    patched.vptr = patched.slots.as_ptr();
+    WEAPON_VTABLE_CACHE.write().insert(kind, patched);
+    patched as *const WeaponVtable as *const usize
 }
 
 #[skyline::hook(offset = 0x33b64e4, inline)]
@@ -209,10 +244,19 @@ static FIGHTER_DATA_CACHE: RwLock<BTreeMap<i32, &'static StaticFighterData>> =
     RwLock::new(BTreeMap::new());
 static KIRBY_COPY_DATA_CACHE: RwLock<BTreeMap<i32, &'static StaticArticleData>> =
     RwLock::new(BTreeMap::new());
+static WEAPON_VTABLE_CACHE: RwLock<BTreeMap<i32, &'static WeaponVtable>> =
+    RwLock::new(BTreeMap::new());
 
 pub fn invalidate_article_cache() {
     FIGHTER_DATA_CACHE.write().clear();
     KIRBY_COPY_DATA_CACHE.write().clear();
+    WEAPON_VTABLE_CACHE.write().clear();
+}
+
+#[repr(C)]
+struct WeaponVtable {
+    pub vptr: *const usize,
+    pub slots: [usize; 104]
 }
 
 #[repr(C)]
@@ -236,10 +280,29 @@ pub struct StaticFighterData {
 pub struct ArticleDescriptor {
     pub weapon_id: i32,
     pub max_count: i32,
-    pub on_init_callback: extern "C" fn(*const u64, *mut BattleObjectModuleAccessor) -> i32,
+    pub on_init_callback: unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32,
     // could also be on shoot
-    pub on_fini_callback: extern "C" fn(*const u64, *mut BattleObjectModuleAccessor) -> i32,
+    pub on_fini_callback: unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32,
     pub extra: u64,
+}
+
+pub static ARTICLE_DESCRIPTOR_REPLACE: RwLock<BTreeMap<i32, BTreeMap<i32, ArticleDescriptorReplace>>> = RwLock::new(BTreeMap::new());
+
+#[repr(C)]
+pub struct ArticleDescriptorReplace {
+    pub max_count: Option<i32>,
+    pub on_init_callback: Option<unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32>,
+    pub on_fini_callback: Option<unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32>,
+}
+
+impl ArticleDescriptorReplace {
+    pub fn new() -> Self {
+        Self {
+            max_count: None,
+            on_init_callback: None,
+            on_fini_callback: None
+        }
+    }
 }
 
 #[repr(C)]
@@ -301,11 +364,15 @@ impl StaticArticleData {
 
 #[skyline::hook(offset = 0x64b730)]
 fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
+    let original_data: *const StaticFighterData = call_original!(kind);
+
+    if RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed) {
+        return original_data;
+    }
+
     if let Some(cached) = FIGHTER_DATA_CACHE.read().get(&kind) {
         return *cached as *const StaticFighterData;
     }
-
-    let original_data: *const StaticFighterData = call_original!(kind);
 
     let mut new_descriptors = vec![];
 
@@ -314,7 +381,9 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     if let Some(new_articles) = NEW_ARTICLES.read().get(&kind) {
 
         for new_article in new_articles.iter() {
+            RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
             let source_data = call_original!(new_article.original_owner);
+            RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
 
             unsafe {
                 let Some(mut article) = (*source_data).get_article(new_article.original_weapon_id) else {
@@ -327,10 +396,18 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
         }
     }
 
-    if let Some(count_updates) = WEAPON_COUNT_UPDATE.read().get(&kind) {
+    if let Some(descriptors) = ARTICLE_DESCRIPTOR_REPLACE.read().get(&kind) {
         for (index, article) in new_descriptors.iter_mut().enumerate() {
-            if let Some(new_count) = count_updates.get(&(index as i32)) {
-                article.max_count = *new_count;
+            if let Some(descriptor) = descriptors.get(&(index as i32)) {
+                if let Some(new_count) = descriptor.max_count {
+                    article.max_count = new_count;
+                }
+                if let Some(init_callback) = descriptor.on_init_callback {
+                    article.on_init_callback = init_callback;
+                }
+                if let Some(fini_callback) = descriptor.on_fini_callback {
+                    article.on_fini_callback = fini_callback;
+                }
             }
         }
     }
@@ -650,7 +727,7 @@ pub fn install() {
         get_static_fighter_data,
         get_weapon_base_kind_hook,
         get_static_weapon_data_hook,
-        get_weapon_specializer_hook,
+        get_weapon_vtable_hook,
         weapon_init_factory_kind,
         weapon_init_owner_category,
         get_pocket_ui_param,
