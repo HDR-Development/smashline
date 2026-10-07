@@ -15,17 +15,12 @@ fn fighter_initialize_object_data(
     entry_id: i32,
     hash: Hash40,
 ) {
-    fighters::CURRENT_PLAYER_ID.store(entry_id as usize, Ordering::Relaxed);
-    weapons::CURRENT_OWNER_KIND.store(kind, Ordering::Relaxed);
-
     call_original!(fighter, id, kind, entry_id, hash);
-
-    weapons::CURRENT_OWNER_KIND.store(-1, Ordering::Relaxed);
-    fighters::CURRENT_PLAYER_ID.store(usize::MAX, Ordering::Relaxed);
 }
 
 pub fn install() {
     // fighters::install();
     weapons::install();
+    crate::utils::install_module_hooks();
     skyline::install_hooks!(fighter_initialize_object_data);
 }

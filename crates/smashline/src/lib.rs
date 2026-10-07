@@ -54,8 +54,8 @@ pub struct AgentEntry {
 }
 impl AgentEntry {
     pub fn new(agent: u64, costume: Costume) -> Self {
-        Self { 
-            hash: agent, 
+        Self {
+            hash: agent,
             costume_data: costume.as_slice().to_vec()
         }
     }
@@ -309,6 +309,24 @@ impl BattleObjectCategory {
     }
 }
 
+#[repr(C)]
+struct WeaponShootMsg<T> {
+    size: u32,
+    payload: T,
+}
+
+pub unsafe extern "C" fn send_weapon_shoot_msg<T>(weapon: *const u64, payload: T) {
+    let msg = WeaponShootMsg {
+        size: std::mem::size_of::<T>().next_multiple_of(8) as u32,
+        payload,
+    };
+    // vtable slot 0x50 on the weapon
+    let vtable = *(weapon as *const *const u64);
+    let f: extern "C" fn(*const u64, *const WeaponShootMsg<T>) =
+        std::mem::transmute(*vtable.add(0x50 / 8));
+    f(weapon, &msg);
+}
+
 macro_rules! decl_imports {
     ($($V:vis fn $name:ident($($arg:ident: $T:ty),*) $(-> $Ret:ty)?;)*) => {
         $(
@@ -414,16 +432,23 @@ decl_imports! {
     );
 
     fn smashline_clone_weapon(
-        original_owner: StringFFI,
+        owner_name: StringFFI,
+        article_name: StringFFI,
         original_article_id: i32,
-        new_owner: StringFFI,
-        new_name: StringFFI,
         use_original_code: bool
-    ) -> i32;
+    ) -> CloneWeapon;
 
     fn smashline_update_weapon_count(
-        article_id: i32,
+        fighter_id: i32,
+        generate_article_id: i32,
         new_count: i32
+    );
+
+    fn smashline_replace_article_descriptor_func(
+        fighter_id: i32,
+        generate_article_id: i32,
+        on_init_callback: Option<unsafe extern "C" fn(*mut u64, *mut smash::app::BattleObjectModuleAccessor) -> i32>,
+        on_fini_callback: Option<unsafe extern "C" fn(*mut u64, *mut smash::app::BattleObjectModuleAccessor) -> i32>
     );
 
     fn smashline_add_param_object(
@@ -433,8 +458,20 @@ decl_imports! {
 
     fn smashline_whitelist_kirby_copy_article(
         fighter_id: i32,
-        article_id: i32
+        generate_article_id: i32
     );
+
+    fn smashline_replace_weapon_vtable(
+        weapon_kind: i32,
+        vtable_slot: usize,
+        vtable_function: usize
+    );
+
+    fn smashline_clone_article_descriptor(
+        fighter_id: i32,
+        original_fighter_id: i32,
+        generate_article_id: i32
+    ) -> CloneWeapon;
 }
 
 pub fn original_acmd(agent: &mut L2CAgentBase, name: Hash40) -> AcmdFunction {
@@ -456,38 +493,74 @@ pub fn original_status<L: StatusLineMarker, T>(
     }
 }
 
+#[repr(C)]
+pub struct CloneWeapon {
+    pub generate_id: i32,
+    pub weapon_id: i32
+}
+
 pub fn clone_weapon(
-    original_owner: impl Into<String>,
+    owner_name: impl Into<String>,
+    article_name: impl Into<String>,
     original_article_id: i32,
-    new_owner: impl Into<String>,
-    new_name: impl Into<String>,
     use_original_code: bool,
-) -> i32 {
+) -> CloneWeapon {
     smashline_clone_weapon(
-        StringFFI::from_str(original_owner),
+        StringFFI::from_str(owner_name),
+        StringFFI::from_str(article_name),
         original_article_id,
-        StringFFI::from_str(new_owner),
-        StringFFI::from_str(new_name),
         use_original_code,
     )
 }
 
 pub fn update_weapon_count(
-    article_id: i32,
+    fighter_id: i32,
+    generate_article_id: i32,
     new_count: i32
 ) {
     smashline_update_weapon_count(
-        article_id,
+        fighter_id,
+        generate_article_id,
         new_count
     );
+}
+
+pub fn replace_article_descriptor_func(
+    fighter_id: i32,
+    generate_article_id: i32,
+    on_init_callback: Option<unsafe extern "C" fn(*mut u64, *mut smash::app::BattleObjectModuleAccessor) -> i32>,
+    on_fini_callback: Option<unsafe extern "C" fn(*mut u64, *mut smash::app::BattleObjectModuleAccessor) -> i32>
+) {
+    smashline_replace_article_descriptor_func(
+        fighter_id,
+        generate_article_id,
+        on_init_callback,
+        on_fini_callback
+    );
+}
+
+pub fn _clone_article_descriptor(
+    fighter_id: i32,
+    original_fighter_id: i32,
+    generate_article_id: i32
+) -> CloneWeapon {
+    smashline_clone_article_descriptor(
+        fighter_id,
+        original_fighter_id,
+        generate_article_id
+    )
 }
 
 pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
     smashline_add_param_object(StringFFI::from_str(fighter), StringFFI::from_str(object));
 }
 
-pub fn whitelist_kirby_copy_article(fighter_id: i32, article_id: i32) {
-    smashline_whitelist_kirby_copy_article(fighter_id, article_id);
+pub fn whitelist_kirby_copy_article(fighter_id: i32, generate_article_id: i32) {
+    smashline_whitelist_kirby_copy_article(fighter_id, generate_article_id);
+}
+
+pub fn replace_weapon_vtable(weapon_kind: i32, vtable_slot: usize, vtable_function: usize) {
+    smashline_replace_weapon_vtable(weapon_kind, vtable_slot, vtable_function);
 }
 
 pub mod api {
