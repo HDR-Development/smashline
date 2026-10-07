@@ -466,6 +466,12 @@ decl_imports! {
         vtable_slot: usize,
         vtable_function: usize
     );
+
+    fn smashline_clone_article_descriptor(
+        fighter_id: i32,
+        original_fighter_id: i32,
+        generate_article_id: i32
+    ) -> CloneWeapon;
 }
 
 pub fn original_acmd(agent: &mut L2CAgentBase, name: Hash40) -> AcmdFunction {
@@ -531,6 +537,18 @@ pub fn replace_article_descriptor_func(
         on_init_callback,
         on_fini_callback
     );
+}
+
+pub fn _clone_article_descriptor(
+    fighter_id: i32,
+    original_fighter_id: i32,
+    generate_article_id: i32
+) -> CloneWeapon {
+    smashline_clone_article_descriptor(
+        fighter_id,
+        original_fighter_id,
+        generate_article_id
+    )
 }
 
 pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {

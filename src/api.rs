@@ -374,7 +374,8 @@ pub extern "C" fn smashline_clone_weapon(
     articles.push(NewArticle {
         original_owner: original_owner_id as i32,
         original_weapon_id: original_article_id,
-        new_weapon_id: article_id
+        new_weapon_id: article_id,
+        skip_patching: false
     });
 
     crate::cloning::weapons::invalidate_article_cache();
@@ -463,4 +464,32 @@ pub extern "C" fn smashline_replace_weapon_vtable(
         .or_default() = vtable_function;
 
     crate::cloning::weapons::invalidate_article_cache();
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_clone_article_descriptor(
+    fighter_id: i32,
+    original_fighter_id: i32,
+    generate_article_id: i32
+) -> CloneWeapon {
+    let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
+    let articles = new_articles
+        .entry(fighter_id)
+        .or_default();
+
+    articles.push(NewArticle {
+        original_owner: original_fighter_id,
+        original_weapon_id: generate_article_id,
+        new_weapon_id: -1,
+        skip_patching: true
+    });
+
+    crate::cloning::weapons::invalidate_article_cache();
+
+    let generate_count = MAX_GENERATE_ARTICLE_IDS[fighter_id as usize];
+    let generate_add = articles.len() as i32;
+    CloneWeapon {
+        generate_id: generate_count + generate_add,
+        weapon_id: -1
+    }
 }

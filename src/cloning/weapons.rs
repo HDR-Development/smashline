@@ -27,7 +27,8 @@ pub struct NewAgent {
 pub struct NewArticle {
     pub original_owner: i32,
     pub original_weapon_id: i32,
-    pub new_weapon_id: i32
+    pub new_weapon_id: i32,
+    pub skip_patching: bool
 }
 
 pub const VANILLA_WEAPON_COUNT: usize = 0x267;
@@ -386,12 +387,26 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
             RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
 
             unsafe {
-                let Some(mut article) = (*source_data).get_article(new_article.original_weapon_id) else {
-                    panic!("Failed to append article table");
-                };
-                article.weapon_id = new_article.new_weapon_id;
+                // bad
+                if new_article.skip_patching {
+                    println!(
+                        "[smashline::weapons] Cloning ArticleDescriptor index {} directly from kind {:#x}",
+                        new_article.original_weapon_id,
+                        new_article.original_owner
+                    );
+                    let mut original_articles = vec![];
+                    original_articles.extend_from_slice((*source_data).articles_as_slice());
+                    let article = original_articles[new_article.original_weapon_id as usize];
+                    new_descriptors.push(article);
+                }
+                else {
+                    let Some(mut article) = (*source_data).get_article(new_article.original_weapon_id) else {
+                        panic!("Failed to append article table");
+                    };
+                    article.weapon_id = new_article.new_weapon_id;
 
-                new_descriptors.push(article);
+                    new_descriptors.push(article);
+                }
             }
         }
     }
