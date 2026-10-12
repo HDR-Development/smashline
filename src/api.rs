@@ -456,6 +456,14 @@ pub extern "C" fn smashline_replace_weapon_vtable(
     vtable_slot: usize,
     vtable_function: usize
 ) {
+    if vtable_slot >= crate::cloning::weapons::WEAPON_VTABLE_SLOTS {
+        println!(
+            "[smashline::weapons] Vtable slot {} is out of range! (max {})",
+            vtable_slot,
+            crate::cloning::weapons::WEAPON_VTABLE_SLOTS - 1
+        );
+        return;
+    }
     *crate::cloning::weapons::WEAPON_VTABLE_UPDATE
         .write()
         .entry(weapon_kind)
@@ -464,6 +472,53 @@ pub extern "C" fn smashline_replace_weapon_vtable(
         .or_default() = vtable_function;
 
     crate::cloning::weapons::invalidate_article_cache();
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_replace_fighter_vtable_costume(
+    fighter_kind: i32,
+    costume: Costume,
+    vtable_slot: usize,
+    vtable_function: usize
+) {
+    if vtable_slot >= crate::cloning::fighters::FIGHTER_VTABLE_SLOTS {
+        println!(
+            "[smashline::fighters] Vtable slot {} is out of range! (max {})",
+            vtable_slot,
+            crate::cloning::fighters::FIGHTER_VTABLE_SLOTS - 1
+        );
+        return;
+    }
+
+    // Claim the costume like the script installers do, so default entries stop applying to it.
+    if let Some(name) = LOWERCASE_FIGHTER_NAMES.get(fighter_kind as usize) {
+        mark_costume(Hash40::new(name), costume);
+    }
+
+    let mut update_map = crate::cloning::fighters::FIGHTER_VTABLE_UPDATE.write();
+    let updates = update_map.entry(fighter_kind).or_default();
+
+    match updates.iter_mut().find(|update| update.costume.as_slice() == costume.as_slice()) {
+        Some(update) => {
+            update.slots.insert(vtable_slot, vtable_function);
+        }
+        None => updates.push(crate::cloning::fighters::FighterVtableUpdate {
+            costume,
+            slots: std::collections::BTreeMap::from([(vtable_slot, vtable_function)]),
+        }),
+    }
+
+    drop(update_map);
+    crate::cloning::fighters::invalidate_fighter_vtable_cache();
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_replace_fighter_vtable(
+    fighter_kind: i32,
+    vtable_slot: usize,
+    vtable_function: usize
+) {
+    smashline_replace_fighter_vtable_costume(fighter_kind, Costume::default(), vtable_slot, vtable_function);
 }
 
 #[no_mangle]

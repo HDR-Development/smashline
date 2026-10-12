@@ -1,8 +1,13 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    collections::BTreeMap,
+    sync::atomic::{AtomicI32, AtomicUsize, Ordering},
+};
 
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
-use smashline::Hash40;
+use smashline::{Costume, Hash40};
+
+use crate::create_agent::LOWERCASE_FIGHTER_NAMES;
 
 static FIGHTER_CLONES: RwLock<[Option<Hash40>; 8]> = RwLock::new([None; 8]);
 
@@ -104,6 +109,109 @@ unsafe fn finish_ai(_ctx: &InlineCtx) {
     CURRENT_PLAYER_ID.store(usize::MAX, Ordering::Relaxed);
 }
 
+pub const FIGHTER_VTABLE_SLOTS: usize = 147;
+
+pub const NO_COSTUME: i32 = -1;
+
+pub static CURRENT_INIT_COSTUME: AtomicI32 = AtomicI32::new(NO_COSTUME);
+
+#[repr(C)]
+struct FighterVtable {
+    vptr: *const usize,
+    padding: [usize; 2],
+    slots: [usize; FIGHTER_VTABLE_SLOTS],
+}
+
+pub struct FighterVtableUpdate {
+    /// Empty costume means the replacement applies to every costume no registered costume set claims
+    /// (and to lookups made without a fighter instance).
+    pub costume: Costume,
+    pub slots: BTreeMap<usize, usize>,
+}
+
+impl FighterVtableUpdate {
+    fn is_default(&self) -> bool {
+        self.costume.as_slice().is_empty()
+    }
+}
+
+pub static FIGHTER_VTABLE_UPDATE: RwLock<BTreeMap<i32, Vec<FighterVtableUpdate>>> =
+    RwLock::new(BTreeMap::new());
+
+static FIGHTER_VTABLE_CACHE: RwLock<BTreeMap<(i32, i32), &'static FighterVtable>> =
+    RwLock::new(BTreeMap::new());
+
+pub fn invalidate_fighter_vtable_cache() {
+    FIGHTER_VTABLE_CACHE.write().clear();
+}
+
+#[skyline::hook(offset = 0x68d530)]
+fn get_fighter_vtable_hook(kind: i32) -> *const usize {
+    let costume = CURRENT_INIT_COSTUME.load(Ordering::Relaxed);
+
+    if let Some(cached) = FIGHTER_VTABLE_CACHE.read().get(&(kind, costume)) {
+        return *cached as *const FighterVtable as *const usize;
+    }
+
+    let original_vtable = call_original!(kind);
+
+    let fighter_vtable_update = FIGHTER_VTABLE_UPDATE.read();
+    let Some(updates) = fighter_vtable_update.get(&kind) else {
+        return original_vtable;
+    };
+
+    // Same rule as the script installers (create_agent.rs): a costume claimed by any registered costume
+    // set for this fighter only takes entries that list it; an unclaimed costume (and lookups made
+    // without a fighter instance) only takes default entries. The two never layer.
+    let has_costume = costume != NO_COSTUME
+        && LOWERCASE_FIGHTER_NAMES
+            .get(kind as usize)
+            .map_or(false, |name| crate::utils::has_costume(Hash40::new(name), costume));
+    let mut merged: BTreeMap<usize, usize> = BTreeMap::new();
+    for update in updates.iter().filter(|update| {
+        if has_costume {
+            update.costume.as_slice().contains(&(costume as usize))
+        } else {
+            update.is_default()
+        }
+    }) {
+        merged.extend(update.slots.iter().map(|(slot, func)| (*slot, *func)));
+    }
+
+    if merged.is_empty() {
+        return original_vtable;
+    }
+    println!(
+        "[smashline::fighters] Replacing vtable functions for Fighter Kind {:#x} costume {}",
+        kind,
+        costume
+    );
+
+    let vptr = unsafe { *(original_vtable as *const *const usize) };
+
+    let mut new_vtable_slots = [0usize; FIGHTER_VTABLE_SLOTS];
+    unsafe { std::ptr::copy_nonoverlapping(vptr, new_vtable_slots.as_mut_ptr(), FIGHTER_VTABLE_SLOTS); }
+
+    for (index, func) in merged.iter() {
+        println!(
+            "[smashline::fighters] Replacing {:#x} Vtable Entry {} with {:#x}",
+            kind,
+            *index,
+            *func
+        );
+        new_vtable_slots[*index] = *func;
+    }
+
+    let patched = Box::leak(Box::new(FighterVtable {
+        vptr: std::ptr::null(),
+        padding: [0; 2],
+        slots: new_vtable_slots,
+    }));
+    patched.vptr = patched.slots.as_ptr();
+    FIGHTER_VTABLE_CACHE.write().insert((kind, costume), patched);
+    patched as *const FighterVtable as *const usize
+}
+
 macro_rules! decl_hooks {
     ($install_fn:ident => $func:expr; $($name:ident($offset:expr, $dst:expr));*) => {
         $(
@@ -185,14 +293,16 @@ decl_hooks! {
 }
 
 pub fn install() {
-    skyline::patching::Patch::in_text(0x2310ec0).nop().unwrap();
-    skyline::install_hooks!(
-        set_current_player_id,
-        lookup_fighter_kind_hash,
-        update_selected_fighter,
-        initialize_ai,
-        finish_ai
-    );
+    // skyline::patching::Patch::in_text(0x2310ec0).nop().unwrap();
+    // skyline::install_hooks!(
+    //     set_current_player_id,
+    //     lookup_fighter_kind_hash,
+    //     update_selected_fighter,
+    //     initialize_ai,
+    //     finish_ai
+    // );
 
-    install_fighter_name_hooks();
+    // install_fighter_name_hooks();
+
+    skyline::install_hooks!(get_fighter_vtable_hook);
 }

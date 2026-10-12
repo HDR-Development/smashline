@@ -178,6 +178,8 @@ fn get_static_weapon_data_hook(kind: i32) -> *const u8 {
 
 pub static WEAPON_VTABLE_UPDATE: RwLock<BTreeMap<i32, BTreeMap<usize, usize>>> = RwLock::new(BTreeMap::new());
 
+pub const WEAPON_VTABLE_SLOTS: usize = 104;
+
 #[skyline::hook(offset = 0x33bed40)]
 fn get_weapon_vtable_hook(kind: i32) -> *const usize {
     if let Some(cached) = WEAPON_VTABLE_CACHE.read().get(&kind) {
@@ -194,11 +196,11 @@ fn get_weapon_vtable_hook(kind: i32) -> *const usize {
     println!("[smashline::weapons] Replacing vtable functions for Weapon Kind {:#x}", kind);
 
     let vptr = unsafe { *(original_vtable as *const *const usize) };
-    let original_slots = unsafe { std::slice::from_raw_parts(vptr, 104) };
+    let original_slots = unsafe { std::slice::from_raw_parts(vptr, WEAPON_VTABLE_SLOTS) };
 
-    let mut new_vtable_slots = [0usize; 104];
+    let mut new_vtable_slots = [0usize; WEAPON_VTABLE_SLOTS];
 
-    unsafe { std::ptr::copy_nonoverlapping(vptr, new_vtable_slots.as_mut_ptr(), 104); }
+    unsafe { std::ptr::copy_nonoverlapping(vptr, new_vtable_slots.as_mut_ptr(), WEAPON_VTABLE_SLOTS); }
 
     for (index, func) in vtable_update.iter() {
         println!(
@@ -257,7 +259,7 @@ pub fn invalidate_article_cache() {
 #[repr(C)]
 struct WeaponVtable {
     pub vptr: *const usize,
-    pub slots: [usize; 104]
+    pub slots: [usize; WEAPON_VTABLE_SLOTS]
 }
 
 #[repr(C)]

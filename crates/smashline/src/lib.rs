@@ -467,6 +467,19 @@ decl_imports! {
         vtable_function: usize
     );
 
+    fn smashline_replace_fighter_vtable(
+        fighter_kind: i32,
+        vtable_slot: usize,
+        vtable_function: usize
+    );
+
+    fn smashline_replace_fighter_vtable_costume(
+        fighter_kind: i32,
+        costume: Costume,
+        vtable_slot: usize,
+        vtable_function: usize
+    );
+
     fn smashline_clone_article_descriptor(
         fighter_id: i32,
         original_fighter_id: i32,
@@ -561,6 +574,22 @@ pub fn whitelist_kirby_copy_article(fighter_id: i32, generate_article_id: i32) {
 
 pub fn replace_weapon_vtable(weapon_kind: i32, vtable_slot: usize, vtable_function: usize) {
     smashline_replace_weapon_vtable(weapon_kind, vtable_slot, vtable_function);
+}
+
+/// Replaces a fighter vtable entry for every costume of `fighter_kind` that no costume-specific
+/// installer (scripts, callbacks or [`replace_fighter_vtable_costume`]) has claimed.
+pub fn replace_fighter_vtable(fighter_kind: i32, vtable_slot: usize, vtable_function: usize) {
+    smashline_replace_fighter_vtable(fighter_kind, vtable_slot, vtable_function);
+}
+
+/// Replaces a fighter vtable entry only for fighters spawned on one of the given costume slots.
+///
+/// Claiming a costume here also stops default scripts, callbacks and vtable replacements from
+/// applying to it, exactly like the `_costume` script installers. Lookups the game performs without
+/// a fighter instance (Kirby copy abilities, FighterManager iteration) only ever see default
+/// replacements.
+pub fn replace_fighter_vtable_costume(fighter_kind: i32, costume: Costume, vtable_slot: usize, vtable_function: usize) {
+    smashline_replace_fighter_vtable_costume(fighter_kind, costume, vtable_slot, vtable_function);
 }
 
 pub mod api {
