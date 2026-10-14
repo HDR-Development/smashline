@@ -236,6 +236,114 @@ unsafe fn weapon_init_owner_category(ctx: &mut InlineCtx) {
     }
 }
 
+// --- Article table: tell weapon and item articles apart by the descriptor flag, not by position ---
+//
+// `ArticleModuleInternal::Initialize` (0x3a6270) sets `article_kind_count` (+0x220) to the length of
+// the leading run of weapon descriptors: it stops at the first row whose flags byte (+0x18) has bit 0
+// set, which marks an item article. Every consumer then treats `index >= count` as "item article".
+// That only works for tables shaped `[weapons..., items...]`; a weapon descriptor appended after an
+// item one (a clone registered after an item descriptor clone, or after a fighter's vanilla item
+// article) is generated through ItemManager with a weapon kind and hangs the game.
+//
+// The hooks below make each consumer read the row's own flag instead:
+// - `Initialize` counts every row (the pool then also reserves item rows' `max_active_count`, which
+//   keeps the prefix-sum slot math in the other functions consistent);
+// - `InitializeArticles` / `DestroyArticles` skip item rows (they must not be instantiated as weapons);
+// - `GenerateArticle` / `IsGeneratable` / `GetActiveNum` / the fini dispatch get a count of 0 (item)
+//   or u32::MAX (weapon) substituted for the compare that follows the load.
+// Each hook sits on the instruction right after the relevant load so the loaded register can be
+// rewritten before it is used; register assignments are from the 13.0.5 disassembly.
+
+const ARTICLE_DESCRIPTOR_SIZE: u64 = 0x20;
+const ARTICLE_DESCRIPTOR_FLAGS: u64 = 0x18;
+/// `ArticleModuleInternal` -> `StaticArticleInfo*`
+const ARTICLE_INTERNAL_INFO: u64 = 0x228;
+/// `StaticArticleInfo` -> `ArticleDescriptor*`
+const ARTICLE_INFO_DESCRIPTORS: u64 = 0x0;
+
+unsafe fn is_item_descriptor(descriptor: u64) -> bool {
+    *((descriptor + ARTICLE_DESCRIPTOR_FLAGS) as *const u8) & 1 != 0
+}
+
+unsafe fn descriptor_from_info(article_info: u64, index: u64) -> u64 {
+    *((article_info + ARTICLE_INFO_DESCRIPTORS) as *const u64) + index * ARTICLE_DESCRIPTOR_SIZE
+}
+
+unsafe fn descriptor_from_internal(internal: u64, index: u64) -> u64 {
+    descriptor_from_info(*((internal + ARTICLE_INTERNAL_INFO) as *const u64), index)
+}
+
+/// Value substituted for `article_kind_count` so that the following `index >= count` compare takes
+/// the item path for item rows and the weapon path for weapon rows.
+fn article_count_for(is_item: bool) -> u64 {
+    if is_item { 0 } else { u32::MAX as u64 }
+}
+
+/// `Initialize`, `tbnz w11, #0` on the row's flags byte: clear the bit so the count covers every row.
+#[skyline::hook(offset = 0x3a62c0, inline)]
+unsafe fn article_init_count_all_rows(ctx: &mut InlineCtx) {
+    let flags = ctx.registers[11].x();
+    ctx.registers[11].set_x(flags & !1);
+}
+
+/// `Initialize` pool sizing, after `ldr w12, [x11, #4]` (x11 = row, w12 = `max_active_count`): item
+/// rows may use -1 for "unlimited", which the vanilla loop never saw; reserve 0 slots for those
+/// instead of 4 billion. Non-negative item rows keep reserving their (unused) slots so the prefix-sum
+/// slot math of the other consumers stays consistent.
+#[skyline::hook(offset = 0x3a62fc, inline)]
+unsafe fn article_init_pool_skip_unlimited_items(ctx: &mut InlineCtx) {
+    let row = ctx.registers[11].x();
+    if is_item_descriptor(row) && (ctx.registers[12].x() as u32 as i32) < 0 {
+        ctx.registers[12].set_x(0);
+    }
+}
+
+/// `InitializeArticles`, right after `bl GetArticleUseTypeMask`: x19 = current descriptor. Zero the
+/// returned use-type mask (w0) for item rows so they are not instantiated as weapons.
+#[skyline::hook(offset = 0x3a64e0, inline)]
+unsafe fn article_init_skip_item_rows(ctx: &mut InlineCtx) {
+    if is_item_descriptor(ctx.registers[19].x()) {
+        ctx.registers[0].set_x(0);
+    }
+}
+
+/// `DestroyArticles`, right after `bl GetArticleUseTypeMask`: x21 = `ArticleModuleInternal`, x22 = row.
+#[skyline::hook(offset = 0x3d3ffc, inline)]
+unsafe fn article_destroy_skip_item_rows(ctx: &mut InlineCtx) {
+    if is_item_descriptor(descriptor_from_internal(ctx.registers[21].x(), ctx.registers[22].x())) {
+        ctx.registers[0].set_x(0);
+    }
+}
+
+/// `GenerateArticle`, after `ldr w9, [x0, #0x220]`: x8 = descriptor of the requested row.
+#[skyline::hook(offset = 0x3a6d18, inline)]
+unsafe fn article_generate_route_by_flag(ctx: &mut InlineCtx) {
+    let is_item = is_item_descriptor(ctx.registers[8].x());
+    ctx.registers[9].set_x(article_count_for(is_item));
+}
+
+/// `IsGeneratable`, after `ldr w10, [x21, #0x220]`: x11 = descriptor of the requested row.
+#[skyline::hook(offset = 0x3d65b4, inline)]
+unsafe fn article_is_generatable_route_by_flag(ctx: &mut InlineCtx) {
+    let is_item = is_item_descriptor(ctx.registers[11].x());
+    ctx.registers[10].set_x(article_count_for(is_item));
+}
+
+/// `GetActiveNum`, after `ldr w8, [x9, #0x220]`: x10 = `StaticArticleInfo`, w2 = row.
+#[skyline::hook(offset = 0x3d677c, inline)]
+unsafe fn article_active_num_route_by_flag(ctx: &mut InlineCtx) {
+    let row = ctx.registers[2].x() & 0xffff_ffff;
+    let is_item = is_item_descriptor(descriptor_from_info(ctx.registers[10].x(), row));
+    ctx.registers[8].set_x(article_count_for(is_item));
+}
+
+/// Article fini dispatch (0x3d76c0), after `ldr w11, [x8, #0x220]`: x9 = `StaticArticleInfo`, x10 = row.
+#[skyline::hook(offset = 0x3d772c, inline)]
+unsafe fn article_fini_route_by_flag(ctx: &mut InlineCtx) {
+    let is_item = is_item_descriptor(descriptor_from_info(ctx.registers[9].x(), ctx.registers[10].x()));
+    ctx.registers[11].set_x(article_count_for(is_item));
+}
+
 pub static RESOLVE_AS_ORIGINAL: AtomicBool = AtomicBool::new(false);
 
 pub static IS_KIRBY_COPYING: AtomicBool = AtomicBool::new(false);
@@ -430,6 +538,25 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
                     article.on_fini_callback = fini_callback;
                 }
             }
+        }
+    }
+
+    // The flag-based article routing (see the inline hooks above) sizes the weapon pool with the
+    // same prefix sums the game uses, but an item row with an "unlimited" (-1) count cannot be
+    // represented there: a weapon row placed after one would alias an earlier weapon's pool slots.
+    let mut unlimited_item_before = false;
+    for (index, article) in new_descriptors.iter().enumerate() {
+        let is_item = article.extra & 1 != 0;
+        if !is_item && unlimited_item_before {
+            println!(
+                "[smashline::weapons] Fighter {:#x}: weapon article {} (kind {:#x}) comes after an item article with an unlimited count; its pool slots will overlap another article's",
+                kind,
+                index,
+                article.weapon_id
+            );
+        }
+        if is_item && article.max_count < 0 {
+            unlimited_item_before = true;
         }
     }
 
@@ -752,6 +879,14 @@ pub fn install() {
         weapon_init_factory_kind,
         weapon_init_owner_category,
         get_pocket_ui_param,
+        article_init_count_all_rows,
+        article_init_pool_skip_unlimited_items,
+        article_init_skip_item_rows,
+        article_destroy_skip_item_rows,
+        article_generate_route_by_flag,
+        article_is_generatable_route_by_flag,
+        article_active_num_route_by_flag,
+        article_fini_route_by_flag,
     );
 
     install_kirby_copy_kind_hooks();
