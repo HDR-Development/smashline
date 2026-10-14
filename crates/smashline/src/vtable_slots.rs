@@ -101,7 +101,7 @@ pub enum FighterVtableSlot {
     Unk98,
     Unk99,
     Unk100,
-    OnStatusChange3,
+    CheckCanTransitionStatus,
     Unk102,
     Unk103,
     Unk104,
@@ -155,7 +155,7 @@ impl FighterVtableSlot {
 
     #[deprecated(note = "renamed to `FighterVtableSlot::OnStatusChange3`")]
     #[allow(non_upper_case_globals)]
-    pub const OnStatusTransition: Self = Self::OnStatusChange3;
+    pub const OnStatusTransition: Self = Self::CheckCanTransitionStatus;
 }
 
 #[repr(usize)]
