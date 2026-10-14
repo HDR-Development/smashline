@@ -384,6 +384,7 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     if let Some(new_articles) = NEW_ARTICLES.read().get(&kind) {
 
         for new_article in new_articles.iter() {
+            println!("[smashline::weapons] Attempting to append article {:#x} to the article table", new_article.new_weapon_id);
             RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
             let source_data = call_original!(new_article.original_owner);
             RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
@@ -405,6 +406,9 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
                     let Some(mut article) = (*source_data).get_article(new_article.original_weapon_id) else {
                         panic!("Failed to append article table");
                     };
+                    println!(
+                        "[smashline::weapons] Success"
+                    );
                     article.weapon_id = new_article.new_weapon_id;
 
                     new_descriptors.push(article);
