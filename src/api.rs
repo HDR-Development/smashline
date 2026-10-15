@@ -491,6 +491,28 @@ pub extern "C" fn smashline_replace_weapon_vtable(
 }
 
 #[no_mangle]
+pub extern "C" fn smashline_get_original_fighter_vtable(
+    fighter_kind: i32,
+    vtable_slot: usize
+) -> usize {
+    let vtable = crate::cloning::fighters::get_fighter_vtable_hook(fighter_kind) as *const crate::cloning::fighters::FighterVtable;
+    unsafe {
+        (*vtable).slots[vtable_slot]
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn smashline_get_original_weapon_vtable(
+    weapon_kind: i32,
+    vtable_slot: usize
+) -> usize {
+    let vtable = crate::cloning::weapons::get_weapon_vtable_hook(weapon_kind) as *const crate::cloning::weapons::WeaponVtable;
+    unsafe {
+        (*vtable).slots[vtable_slot]
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn smashline_replace_fighter_vtable_costume(
     fighter_kind: i32,
     costume: Costume,

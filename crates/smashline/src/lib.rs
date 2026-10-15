@@ -475,6 +475,16 @@ decl_imports! {
         vtable_function: usize
     );
 
+    fn smashline_get_original_weapon_vtable(
+        weapon_kind: i32,
+        vtable_slot: usize
+    ) -> usize;
+
+    fn smashline_get_original_fighter_vtable(
+        fighter_kind: i32,
+        vtable_slot: usize
+    ) -> usize;
+
     fn smashline_replace_fighter_vtable_costume(
         fighter_kind: i32,
         costume: Costume,
@@ -592,6 +602,14 @@ pub fn replace_fighter_vtable(fighter_kind: i32, vtable_slot: FighterVtableSlot,
 /// replacements.
 pub fn replace_fighter_vtable_costume(fighter_kind: i32, costume: Costume, vtable_slot: FighterVtableSlot, vtable_function: usize) {
     smashline_replace_fighter_vtable_costume(fighter_kind, costume, vtable_slot as usize, vtable_function);
+}
+
+pub fn get_original_weapon_vtable(weapon_kind: i32, vtable_slot: WeaponVtableSlot) -> usize {
+    smashline_get_original_weapon_vtable(weapon_kind, vtable_slot as usize)
+}
+
+pub fn get_original_fighter_vtable(fighter_kind: i32, vtable_slot: FighterVtableSlot) -> usize {
+    smashline_get_original_fighter_vtable(fighter_kind, vtable_slot as usize)
 }
 
 pub mod api {

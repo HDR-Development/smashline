@@ -181,7 +181,7 @@ pub static WEAPON_VTABLE_UPDATE: RwLock<BTreeMap<i32, BTreeMap<usize, usize>>> =
 pub const WEAPON_VTABLE_SLOTS: usize = 104;
 
 #[skyline::hook(offset = 0x33bed40)]
-fn get_weapon_vtable_hook(kind: i32) -> *const usize {
+pub fn get_weapon_vtable_hook(kind: i32) -> *const usize {
     if let Some(cached) = WEAPON_VTABLE_CACHE.read().get(&kind) {
         return *cached as *const WeaponVtable as *const usize;
     }
@@ -365,7 +365,7 @@ pub fn invalidate_article_cache() {
 }
 
 #[repr(C)]
-struct WeaponVtable {
+pub struct WeaponVtable {
     pub vptr: *const usize,
     pub slots: [usize; WEAPON_VTABLE_SLOTS]
 }

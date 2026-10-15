@@ -116,10 +116,10 @@ pub const NO_COSTUME: i32 = -1;
 pub static CURRENT_INIT_COSTUME: AtomicI32 = AtomicI32::new(NO_COSTUME);
 
 #[repr(C)]
-struct FighterVtable {
+pub struct FighterVtable {
     vptr: *const usize,
     padding: [usize; 2],
-    slots: [usize; FIGHTER_VTABLE_SLOTS],
+    pub slots: [usize; FIGHTER_VTABLE_SLOTS],
 }
 
 pub struct FighterVtableUpdate {
@@ -146,7 +146,7 @@ pub fn invalidate_fighter_vtable_cache() {
 }
 
 #[skyline::hook(offset = 0x68d530)]
-fn get_fighter_vtable_hook(kind: i32) -> *const usize {
+pub fn get_fighter_vtable_hook(kind: i32) -> *const usize {
     let costume = CURRENT_INIT_COSTUME.load(Ordering::Relaxed);
 
     if let Some(cached) = FIGHTER_VTABLE_CACHE.read().get(&(kind, costume)) {
