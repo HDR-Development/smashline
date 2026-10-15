@@ -329,6 +329,18 @@ pub extern "C" fn smashline_clone_weapon(
         .unwrap() as i32;
     println!("[smashline::cloning] The original article being cloned is {}_{}", original_owner_name, original_article_name);
 
+    if let Some(vanilla_id) = (0..VANILLA_WEAPON_COUNT).find(|&id|
+        LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name &&
+        LOWERCASE_WEAPON_NAMES.get(id).unwrap() == article_name
+    ) {
+        panic!(
+            "[smashline::cloning] Cannot clone {}_{}: a vanilla article with this owner/name already exists (Weapon ID {:#x})",
+            owner_name,
+            article_name,
+            vanilla_id
+        );
+    }
+
     let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
 
     let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
