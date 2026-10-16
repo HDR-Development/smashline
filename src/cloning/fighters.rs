@@ -147,6 +147,9 @@ pub fn invalidate_fighter_vtable_cache() {
 
 #[skyline::hook(offset = 0x68d530)]
 pub fn get_fighter_vtable_hook(kind: i32) -> *const usize {
+    if super::weapons::RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed) {
+        return call_original!(kind);
+    }
     let costume = CURRENT_INIT_COSTUME.load(Ordering::Relaxed);
 
     if let Some(cached) = FIGHTER_VTABLE_CACHE.read().get(&(kind, costume)) {

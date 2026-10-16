@@ -604,10 +604,13 @@ pub fn replace_fighter_vtable_costume(fighter_kind: i32, costume: Costume, vtabl
     smashline_replace_fighter_vtable_costume(fighter_kind, costume, vtable_slot as usize, vtable_function);
 }
 
+/// Returns the original vtable function for the weapon kind and slot.
+/// If you pass in a cloned weapon, it will get the base weapon's vtable funcion.
 pub fn get_original_weapon_vtable(weapon_kind: i32, vtable_slot: WeaponVtableSlot) -> usize {
     smashline_get_original_weapon_vtable(weapon_kind, vtable_slot as usize)
 }
 
+/// Returns the original vtable function for the fighter kind and slot.
 pub fn get_original_fighter_vtable(fighter_kind: i32, vtable_slot: FighterVtableSlot) -> usize {
     smashline_get_original_fighter_vtable(fighter_kind, vtable_slot as usize)
 }

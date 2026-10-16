@@ -1,6 +1,5 @@
 use std::{
-    num::{NonZeroU64, NonZeroUsize},
-    ptr::NonNull,
+    num::{NonZeroU64, NonZeroUsize}, ptr::NonNull, sync::atomic::Ordering,
 };
 
 use acmd_engine::action::ActionRegistry;
@@ -506,7 +505,10 @@ pub extern "C" fn smashline_get_original_weapon_vtable(
     weapon_kind: i32,
     vtable_slot: usize
 ) -> usize {
+    let previous = crate::cloning::weapons::RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed);
+    crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
     let vtable = crate::cloning::weapons::get_weapon_vtable_hook(weapon_kind) as *const crate::cloning::weapons::WeaponVtable;
+    crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
     unsafe {
         (*vtable).slots[vtable_slot]
     }

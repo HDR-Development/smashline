@@ -182,6 +182,10 @@ pub const WEAPON_VTABLE_SLOTS: usize = 104;
 
 #[skyline::hook(offset = 0x33bed40)]
 pub fn get_weapon_vtable_hook(kind: i32) -> *const usize {
+    if RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed) {
+        let original_kind = original_kind_of(kind).unwrap_or(kind);
+        return call_original!(original_kind);
+    }
     if let Some(cached) = WEAPON_VTABLE_CACHE.read().get(&kind) {
         return *cached as *const WeaponVtable as *const usize;
     }
