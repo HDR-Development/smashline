@@ -68,7 +68,7 @@
 //! To further split up the logic into more maintainable components, there are four different
 //! categories of ACMD scripts:
 //! - `game` scripts
-//!   
+//!
 //!   `game` scripts operate on the core state of the object. Here you will find hitbox placements,
 //! state manipulation, occasional button checks, etc.
 //!
@@ -78,14 +78,14 @@
 //! off-handed to the other scripts as a nice separation. The speed of those scripts are also
 //! impacted by these calls.
 //! - `effect` scripts
-//!   
+//!
 //!   `effect` scripts are purely visual, although changing them may lead to changes in how the
 //! RNG generators work since some effects generate RNG values. Sword trails, singular effects,
 //! flashes, screen backgrounds, etc. are usually all controlled by effects. They are not always
 //! in the `effect` scripts, but for animations' associated effects that is where you will find
 //! them.
 //! - `sound` scripts
-//!    
+//!
 //!   `sound` scripts make calls to the game's sound module and libraries to either play sound
 //! effects or pick a sound effect to play from a sound effect bank.
 //! - `expression` scripts
@@ -94,10 +94,15 @@
 //! might display an interaction with sloped ground or how rumble is applied will happen in these
 //! scripts.
 //!
-#![allow(unused)]
-#![allow(non_snake_case)]
-#![allow(static_mut_refs)]
-#![allow(elided_named_lifetimes)]
+#![allow(
+    unused,
+    non_snake_case,
+    static_mut_refs,
+    mismatched_lifetime_syntaxes,
+    invalid_value,
+    integer_to_ptr_transmutes
+)]
+
 
 mod cloning;
 

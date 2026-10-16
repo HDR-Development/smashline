@@ -23,7 +23,7 @@ use smashline::{
 use vtables::{CustomDataAccessError, VirtualClass};
 
 use crate::{
-    cloning::weapons::IGNORE_NEW_AGENTS, interpreter::LoadedScript,
+    interpreter::LoadedScript,
     static_accessor::StaticArrayAccessor, callbacks::{CALLBACKS, StatusCallbackFunction}
 };
 
@@ -297,6 +297,15 @@ pub const LOWERCASE_WEAPON_NAMES: StaticArrayAccessor<&'static str> =
 
 pub const LOWERCASE_WEAPON_OWNER_NAMES: StaticArrayAccessor<&'static str> =
     StaticArrayAccessor::new(0x5189240, 0x267);
+
+pub const LOWERCASE_WEAPON_CATEGORY_NAMES: StaticArrayAccessor<&'static str> =
+    StaticArrayAccessor::new(0x5187f08, 0x267);
+
+pub const WEAPON_OWNER_IDS: StaticArrayAccessor<i32> =
+    StaticArrayAccessor::new(0x455e7e4, 0x267);
+
+pub const WEAPON_OWNER_CATEGORIES: StaticArrayAccessor<i8> =
+    StaticArrayAccessor::new(0x455e57c, 0x267);
 
 enum OriginalFunc {
     CreateAgentShare {
@@ -580,17 +589,26 @@ fn create_agent_hook(
             {
                 (agent, None)
             } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
-                crate::utils::load_fighter_module(fighter_id);
-                while !crate::utils::is_fighter_module_loaded(fighter_id) {
-                    std::thread::sleep(Duration::from_millis(1));
+                // The owner's module load already requested this module (see
+                // `utils::load_fighter_code_module_hook`); only load it here as a fallback, in which
+                // case it stays loaded rather than being released with this agent.
+                if !crate::utils::is_fighter_module_loaded(fighter_id) {
+                    println!("[smashline::create_agent] Loading nro for fighter ID {:#x}", fighter_id);
+                    crate::utils::load_fighter_module(fighter_id);
+                    while !crate::utils::is_fighter_module_loaded(fighter_id) {
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    println!("[smashline::create_agent] Finished loading nro for fighter ID {:#x}", fighter_id);
                 }
 
-                IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
+                // Resolve the clone as its original owner/article so the lookup lands in the
+                // original fighter's module.
+                crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
                 let result = original.call(object, boma, lua_state);
-                IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
+                crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
 
                 if let Some(agent) = result {
-                    (agent, Some(fighter_id))
+                    (agent, None)
                 } else {
                     let mut agent = Box::new(std::mem::MaybeUninit::zeroed());
                     unsafe {
@@ -1077,19 +1095,22 @@ fn create_agent_status_weapon(
         if let Some(agent) = call_original!(object, boma, lua_state) {
             (false, agent, None)
         } else if let Some(fighter_id) = crate::utils::get_weapon_code_dependency(object.kind) {
-            crate::utils::load_fighter_module(fighter_id);
-            while !crate::utils::is_fighter_module_loaded(fighter_id) {
-                std::thread::sleep(Duration::from_millis(1));
+            if !crate::utils::is_fighter_module_loaded(fighter_id) {
+                println!("[smashline::create_agent] Loading nro for fighter ID {:#x}", fighter_id);
+                crate::utils::load_fighter_module(fighter_id);
+                while !crate::utils::is_fighter_module_loaded(fighter_id) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                println!("[smashline::create_agent] Finished loading nro for fighter ID {:#x}", fighter_id);
             }
 
-            IGNORE_NEW_AGENTS.store(true, Ordering::Relaxed);
+            crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
             let result = call_original!(object, boma, lua_state);
-            IGNORE_NEW_AGENTS.store(false, Ordering::Relaxed);
+            crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
 
             if let Some(agent) = result {
-                (false, agent, Some(fighter_id))
+                (false, agent, None)
             } else {
-                crate::utils::unload_fighter_module(fighter_id);
                 let mut agent = Box::new(std::mem::MaybeUninit::zeroed());
                 unsafe {
                     weapon_common_ctor(agent.as_mut_ptr(), object, boma, lua_state);
