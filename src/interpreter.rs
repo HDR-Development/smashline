@@ -157,7 +157,10 @@ pub static ACTION_REGISTRY: ActionRegistry = ActionRegistry::new();
 pub static LOADED_SCRIPTS: locks::RwLock<BTreeMap<Hash40, Weak<Vec<LoadedScript>>>> =
     locks::RwLock::new(BTreeMap::new());
 
-static FIBER_MAP: Mutex<BTreeMap<u64, (u64, u64)>> = Mutex::new(BTreeMap::new());
+/// Live interpreter activations per fiber, innermost last. A script can invoke another agent's
+/// script by hash synchronously on the same fiber (e.g. a fighter's grab running its article's
+/// script), so one fiber can hold several activations at once; each is a `(landing_pad, sp)`.
+static FIBER_MAP: Mutex<BTreeMap<u64, Vec<(u64, u64)>>> = Mutex::new(BTreeMap::new());
 
 #[no_mangle]
 extern "C" fn smashline_interpreter(
@@ -201,30 +204,38 @@ extern "C" fn smashline_interpreter(
 extern "C" fn set_smashline_interpreter_landing(landing_pad: u64, sp: u64) {
     FIBER_MAP
         .lock()
-        .insert(unsafe { get_current_fiber() }, (landing_pad, sp));
+        .entry(unsafe { get_current_fiber() })
+        .or_default()
+        .push((landing_pad, sp));
 }
 
 #[no_mangle]
 extern "C" fn clear_smashline_interpreter_landing() {
-    FIBER_MAP.lock().remove(unsafe { &get_current_fiber() });
+    let fiber = unsafe { get_current_fiber() };
+    let mut map = FIBER_MAP.lock();
+    if let Some(activations) = map.get_mut(&fiber) {
+        activations.pop();
+        if activations.is_empty() {
+            map.remove(&fiber);
+        }
+    }
 }
 
 #[no_mangle]
 extern "C" fn restore_smashline_interpreter_stack() -> u64 {
-    FIBER_MAP
-        .lock()
-        .get(&unsafe { get_current_fiber() })
-        .copied()
-        .unwrap()
-        .1
+    current_activation().unwrap().1
 }
 
 pub fn try_get_interpreter_landing_pad() -> Option<u64> {
+    current_activation().map(|(landing_pad, _)| landing_pad)
+}
+
+/// The innermost live interpreter activation on the current fiber.
+fn current_activation() -> Option<(u64, u64)> {
     FIBER_MAP
         .lock()
         .get(&unsafe { get_current_fiber() })
-        .copied()
-        .map(|(ip, _)| ip)
+        .and_then(|activations| activations.last().copied())
 }
 
 const CALL_COROUTINE_OFFSET: usize = 0x52e400;

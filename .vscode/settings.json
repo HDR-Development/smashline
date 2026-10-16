@@ -1,10 +1,10 @@
 {
-    // "rust-analyzer.check.overrideCommand": [
-    //     "cargo",
-    //     "skyline",
-    //     "check",
-    //     "--json"
-    // ],
+    "rust-analyzer.check.overrideCommand": [
+        "cargo",
+        "skyline",
+        "check",
+        "--json"
+    ],
     // "rust-analyzer.cargo.buildScripts.overrideCommand": [
     //     "cargo",
     //     "skyline",
