@@ -340,6 +340,21 @@ pub extern "C" fn smashline_clone_weapon(
         );
     }
 
+    if let Some(vanilla_id) = (0..VANILLA_WEAPON_COUNT).find(|&id|
+        LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name &&
+        LOWERCASE_WEAPON_NAMES.get(id).unwrap() == original_article_name
+    ) {
+        panic!(
+            "[smashline::cloning] Cannot clone {}_{} onto {}: it already has a vanilla article named {} (Weapon ID {:#x}), whose param_{} lookups would be remapped to the clone",
+            original_owner_name,
+            original_article_name,
+            owner_name,
+            original_article_name,
+            vanilla_id,
+            original_article_name
+        );
+    }
+
     let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
 
     let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
