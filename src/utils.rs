@@ -157,8 +157,7 @@ pub fn load_fighter_module(kind: i32) {
 
         // Safe bc Module is aligned to 0x8 and so the size is 0x138
         *(module as *mut u32).add(0x134 / 4) = 1;
-        // 0x133 is the manager's "unload pending" flag. It's padding in skyline's Module, so
-        // nothing above writes it, and the manager drops a load command if it's set.
+        // set "unload pending" flag to prevent infinite load
         *(module as *mut u8).add(0x133) = 0;
 
         (*tree).insert(Hash40::new(name), module);
