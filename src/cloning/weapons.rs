@@ -8,7 +8,19 @@ use locks::RwLock;
 use skyline::hooks::InlineCtx;
 use smashline::{skyline_smash::app::BattleObjectModuleAccessor, Hash40};
 
-use crate::create_agent::{LOWERCASE_FIGHTER_NAMES, LOWERCASE_WEAPON_CATEGORY_NAMES, LOWERCASE_WEAPON_NAMES, LOWERCASE_WEAPON_OWNER_NAMES, WEAPON_OWNER_CATEGORIES, WEAPON_OWNER_IDS};
+use crate::{
+    cloning::RESOLVE_AS_ORIGINAL,
+    create_agent::{
+        LOWERCASE_FIGHTER_NAMES,
+        LOWERCASE_WEAPON_CATEGORY_NAMES,
+        LOWERCASE_WEAPON_NAMES,
+        LOWERCASE_WEAPON_OWNER_NAMES,
+        WEAPON_OWNER_CATEGORIES,
+        WEAPON_OWNER_IDS
+    }
+};
+
+pub mod vtables;
 
 pub struct NewAgent {
     pub article_id: i32,
@@ -176,55 +188,6 @@ fn get_static_weapon_data_hook(kind: i32) -> *const u8 {
     call_original!(kind)
 }
 
-pub static WEAPON_VTABLE_UPDATE: RwLock<BTreeMap<i32, BTreeMap<usize, usize>>> = RwLock::new(BTreeMap::new());
-
-pub const WEAPON_VTABLE_SLOTS: usize = 104;
-
-#[skyline::hook(offset = 0x33bed40)]
-pub fn get_weapon_vtable_hook(kind: i32) -> *const usize {
-    if RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed) {
-        let original_kind = original_kind_of(kind).unwrap_or(kind);
-        return call_original!(original_kind);
-    }
-    if let Some(cached) = WEAPON_VTABLE_CACHE.read().get(&kind) {
-        return *cached as *const WeaponVtable as *const usize;
-    }
-    let original_kind = original_kind_of(kind).unwrap_or(kind);
-    let original_vtable = call_original!(original_kind);
-
-    let weapon_vtable_update = WEAPON_VTABLE_UPDATE.read();
-    let Some(vtable_update) = weapon_vtable_update.get(&kind) else {
-        println!("[smashline::weapons] Weapon Kind {:#x} has no vtable functions to replace!", kind);
-        return original_vtable;
-    };
-    println!("[smashline::weapons] Replacing vtable functions for Weapon Kind {:#x}", kind);
-
-    let vptr = unsafe { *(original_vtable as *const *const usize) };
-    let original_slots = unsafe { std::slice::from_raw_parts(vptr, WEAPON_VTABLE_SLOTS) };
-
-    let mut new_vtable_slots = [0usize; WEAPON_VTABLE_SLOTS];
-
-    unsafe { std::ptr::copy_nonoverlapping(vptr, new_vtable_slots.as_mut_ptr(), WEAPON_VTABLE_SLOTS); }
-
-    for (index, func) in vtable_update.iter() {
-        println!(
-            "[smashline::weapons] Replacing {:#x} Vtable Entry {} with {:#x}",
-            kind,
-            *index,
-            *func
-        );
-        new_vtable_slots[*index] = *func;
-    }
-
-    let patched = Box::leak(Box::new(WeaponVtable {
-        vptr: std::ptr::null(),
-        slots: new_vtable_slots,
-    }));
-    patched.vptr = patched.slots.as_ptr();
-    WEAPON_VTABLE_CACHE.write().insert(kind, patched);
-    patched as *const WeaponVtable as *const usize
-}
-
 #[skyline::hook(offset = 0x33b64e4, inline)]
 unsafe fn weapon_init_factory_kind(ctx: &mut InlineCtx) {
     if let Some(original) = original_kind_of(ctx.registers[28].x() as i32) {
@@ -348,8 +311,6 @@ unsafe fn article_fini_route_by_flag(ctx: &mut InlineCtx) {
     ctx.registers[11].set_x(article_count_for(is_item));
 }
 
-pub static RESOLVE_AS_ORIGINAL: AtomicBool = AtomicBool::new(false);
-
 pub static IS_KIRBY_COPYING: AtomicBool = AtomicBool::new(false);
 pub static CURRENT_KIRBY_COPY: AtomicI32 = AtomicI32::new(-1);
 
@@ -359,19 +320,11 @@ static FIGHTER_DATA_CACHE: RwLock<BTreeMap<i32, &'static StaticFighterData>> =
     RwLock::new(BTreeMap::new());
 static KIRBY_COPY_DATA_CACHE: RwLock<BTreeMap<i32, &'static StaticArticleData>> =
     RwLock::new(BTreeMap::new());
-static WEAPON_VTABLE_CACHE: RwLock<BTreeMap<i32, &'static WeaponVtable>> =
-    RwLock::new(BTreeMap::new());
 
 pub fn invalidate_article_cache() {
     FIGHTER_DATA_CACHE.write().clear();
     KIRBY_COPY_DATA_CACHE.write().clear();
-    WEAPON_VTABLE_CACHE.write().clear();
-}
-
-#[repr(C)]
-pub struct WeaponVtable {
-    pub vptr: *const usize,
-    pub slots: [usize; WEAPON_VTABLE_SLOTS]
+    vtables::WEAPON_VTABLE_CACHE.write().clear();
 }
 
 #[repr(C)]
@@ -875,11 +828,12 @@ pub fn install() {
     install_weapon_category_name_hooks();
     install_weapon_owner_category_hooks();
 
+    vtables::install();
+
     skyline::install_hooks!(
         get_static_fighter_data,
         get_weapon_base_kind_hook,
         get_static_weapon_data_hook,
-        get_weapon_vtable_hook,
         weapon_init_factory_kind,
         weapon_init_owner_category,
         get_pocket_ui_param,

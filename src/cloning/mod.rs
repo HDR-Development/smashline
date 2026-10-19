@@ -1,4 +1,4 @@
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use smash::app::BattleObject;
 use smashline::Hash40;
@@ -6,6 +6,8 @@ use smashline::Hash40;
 #[allow(dead_code)]
 pub mod fighters;
 pub mod weapons;
+
+pub static RESOLVE_AS_ORIGINAL: AtomicBool = AtomicBool::new(false);
 
 #[skyline::hook(offset = 0x6079d0)]
 fn fighter_initialize_object_data(

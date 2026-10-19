@@ -23,8 +23,7 @@ use smashline::{
 use vtables::{CustomDataAccessError, VirtualClass};
 
 use crate::{
-    interpreter::LoadedScript,
-    static_accessor::StaticArrayAccessor, callbacks::{CALLBACKS, StatusCallbackFunction}
+    callbacks::{CALLBACKS, StatusCallbackFunction}, cloning::RESOLVE_AS_ORIGINAL, interpreter::LoadedScript, static_accessor::StaticArrayAccessor
 };
 
 #[allow(improper_ctypes)]
@@ -603,9 +602,9 @@ fn create_agent_hook(
 
                 // Resolve the clone as its original owner/article so the lookup lands in the
                 // original fighter's module.
-                crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
+                RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
                 let result = original.call(object, boma, lua_state);
-                crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
+                RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
 
                 if let Some(agent) = result {
                     (agent, None)
@@ -1104,9 +1103,9 @@ fn create_agent_status_weapon(
                 println!("[smashline::create_agent] Finished loading nro for fighter ID {:#x}", fighter_id);
             }
 
-            crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
+            RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
             let result = call_original!(object, boma, lua_state);
-            crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
+            RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
 
             if let Some(agent) = result {
                 (false, agent, None)

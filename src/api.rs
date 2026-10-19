@@ -1,23 +1,33 @@
 use std::{
-    num::{NonZeroU64, NonZeroUsize}, ptr::NonNull, sync::atomic::Ordering,
+    num::{NonZeroU64, NonZeroUsize},
+    ptr::NonNull,
+    sync::atomic::Ordering,
 };
 
 use acmd_engine::action::ActionRegistry;
 use rtld::Section;
 use smashline::{
-    Acmd, AcmdFunction, AgentEntry, Costume, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI, skyline_smash::app::BattleObjectModuleAccessor,
+    skyline_smash::app::BattleObjectModuleAccessor, Acmd, AcmdFunction, AgentEntry, Costume,
+    Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
 };
 
 use crate::{
-    callbacks::{StatusCallback, StatusCallbackFunction}, cloning::weapons::{ArticleDescriptorReplace, MAX_GENERATE_ARTICLE_IDS, NewAgent, NewArticle, VANILLA_WEAPON_COUNT, WEAPON_VTABLE_UPDATE}, create_agent::{
-        AcmdScript, LOWERCASE_FIGHTER_NAMES, LOWERCASE_WEAPON_NAMES, LOWERCASE_WEAPON_OWNER_NAMES, StatusScript, StatusScriptFunction
-    }, state_callback::{StateCallback, StateCallbackFunction},
+    callbacks::{StatusCallback, StatusCallbackFunction},
+    cloning::{
+        fighters::vtables::{get_fighter_vtable_hook, FighterVtable, FighterVtableUpdate},
+        weapons::{
+            vtables::WeaponVtable, ArticleDescriptorReplace, NewAgent, NewArticle,
+            MAX_GENERATE_ARTICLE_IDS, VANILLA_WEAPON_COUNT,
+        },
+    },
+    create_agent::{
+        AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
+        LOWERCASE_WEAPON_NAMES, LOWERCASE_WEAPON_OWNER_NAMES,
+    },
+    state_callback::{StateCallback, StateCallbackFunction},
 };
 
-fn mark_costume(
-    agent: Hash40,
-    costume: Costume,
-) {
+fn mark_costume(agent: Hash40, costume: Costume) {
     let costume_slice = costume.as_slice();
 
     if costume_slice.is_empty() {
@@ -25,18 +35,14 @@ fn mark_costume(
     }
 
     let mut costumes = crate::create_agent::COSTUMES.write();
-    let costumes = costumes
-        .entry(agent)
-        .or_default();
+    let costumes = costumes.entry(agent).or_default();
 
     for c in &mut *costumes {
         if costume_slice == c.as_slice() {
             return;
         }
 
-        let exists = costume_slice.iter().any(|e| {
-            c.as_slice().contains(e)
-        });
+        let exists = costume_slice.iter().any(|e| c.as_slice().contains(e));
 
         if exists {
             // TODO: Do something if a costume has already been marked for this agent
@@ -48,13 +54,9 @@ fn mark_costume(
 
 #[no_mangle]
 pub extern "C" fn smashline_remove_by_plugin_range(start: usize, end: usize) {
-    crate::create_agent::ACMD_SCRIPTS_DEV
-        .write()
-        .clear();
+    crate::create_agent::ACMD_SCRIPTS_DEV.write().clear();
 
-    crate::create_agent::STATUS_SCRIPTS_DEV
-        .write()
-        .clear();
+    crate::create_agent::STATUS_SCRIPTS_DEV.write().clear();
 
     {
         let mut callbacks = crate::callbacks::CALLBACKS.write();
@@ -92,14 +94,30 @@ pub extern "C" fn smashline_install_acmd_script_costume(
             .write()
             .entry(AgentEntry::new(agent.0, costume))
             .or_default()
-            .set_script(script, category, AcmdScript { function, priority, costume });
+            .set_script(
+                script,
+                category,
+                AcmdScript {
+                    function,
+                    priority,
+                    costume,
+                },
+            );
         return;
     }
     crate::create_agent::ACMD_SCRIPTS
         .write()
         .entry(AgentEntry::new(agent.0, costume))
         .or_default()
-        .set_script(script, category, AcmdScript { function, priority, costume });
+        .set_script(
+            script,
+            category,
+            AcmdScript {
+                function,
+                priority,
+                costume,
+            },
+        );
 }
 
 #[no_mangle]
@@ -110,7 +128,14 @@ pub extern "C" fn smashline_install_acmd_script(
     priority: Priority,
     function: unsafe extern "C" fn(&mut L2CAgentBase),
 ) {
-    smashline_install_acmd_script_costume(agent, Costume::default(), script, category, priority, function);
+    smashline_install_acmd_script_costume(
+        agent,
+        Costume::default(),
+        script,
+        category,
+        priority,
+        function,
+    );
 }
 
 #[no_mangle]
@@ -135,7 +160,7 @@ pub extern "C" fn smashline_install_status_script_costume(
             .push(StatusScript {
                 id: status,
                 function: StatusScriptFunction::from_line(line, function),
-                costume
+                costume,
             });
         return;
     }
@@ -146,7 +171,7 @@ pub extern "C" fn smashline_install_status_script_costume(
         .push(StatusScript {
             id: status,
             function: StatusScriptFunction::from_line(line, function),
-            costume
+            costume,
         });
 }
 
@@ -169,8 +194,7 @@ pub extern "C" fn smashline_install_line_callback_costume(
 ) {
     let agent = agent.map(|value| Hash40(value.get()));
 
-    if agent != Some(Hash40::new("fighter"))
-    && agent != Some(Hash40::new("weapon")) {
+    if agent != Some(Hash40::new("fighter")) && agent != Some(Hash40::new("weapon")) {
         mark_costume(agent.unwrap(), costume);
     }
 
@@ -235,8 +259,7 @@ pub extern "C" fn smashline_install_state_callback_costume(
 ) {
     let agent = agent.map(|value| Hash40(value.get()));
 
-    if agent != Some(Hash40::new("fighter"))
-    && agent != Some(Hash40::new("weapon")) {
+    if agent != Some(Hash40::new("fighter")) && agent != Some(Hash40::new("weapon")) {
         mark_costume(agent.unwrap(), costume);
     }
 
@@ -298,7 +321,7 @@ pub extern "C" fn smashline_reload_script(
 #[repr(C)]
 pub struct CloneWeapon {
     pub generate_id: i32,
-    pub weapon_id: i32
+    pub weapon_id: i32,
 }
 
 #[no_mangle]
@@ -310,28 +333,41 @@ pub extern "C" fn smashline_clone_weapon(
 ) -> CloneWeapon {
     let owner_name = owner_name.as_str().unwrap().to_string();
     let article_name = article_name.as_str().unwrap().to_string();
-    println!("[smashline::cloning] New weapon {}_{} is being cloned!", owner_name, article_name);
+    println!(
+        "[smashline::cloning] New weapon {}_{} is being cloned!",
+        owner_name, article_name
+    );
 
     let owner_id = LOWERCASE_FIGHTER_NAMES
         .iter()
         .position(|name| name == owner_name)
         .unwrap() as i32;
-    println!("[smashline::cloning] Owner ID has been found: {:#x}", owner_id);
+    println!(
+        "[smashline::cloning] Owner ID has been found: {:#x}",
+        owner_id
+    );
 
-    let original_owner_name = LOWERCASE_WEAPON_OWNER_NAMES.get(original_article_id as usize).unwrap();
+    let original_owner_name = LOWERCASE_WEAPON_OWNER_NAMES
+        .get(original_article_id as usize)
+        .unwrap();
 
-    let original_article_name = LOWERCASE_WEAPON_NAMES.get(original_article_id as usize).unwrap();
+    let original_article_name = LOWERCASE_WEAPON_NAMES
+        .get(original_article_id as usize)
+        .unwrap();
 
     let original_owner_id = LOWERCASE_FIGHTER_NAMES
         .iter()
         .position(|name| name == original_owner_name)
         .unwrap() as i32;
-    println!("[smashline::cloning] The original article being cloned is {}_{}", original_owner_name, original_article_name);
+    println!(
+        "[smashline::cloning] The original article being cloned is {}_{}",
+        original_owner_name, original_article_name
+    );
 
-    if let Some(vanilla_id) = (0..VANILLA_WEAPON_COUNT).find(|&id|
-        LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name &&
-        LOWERCASE_WEAPON_NAMES.get(id).unwrap() == article_name
-    ) {
+    if let Some(vanilla_id) = (0..VANILLA_WEAPON_COUNT).find(|&id| {
+        LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name
+            && LOWERCASE_WEAPON_NAMES.get(id).unwrap() == article_name
+    }) {
         panic!(
             "[smashline::cloning] Cannot clone {}_{}: a vanilla article with this owner/name already exists (Weapon ID {:#x})",
             owner_name,
@@ -340,10 +376,10 @@ pub extern "C" fn smashline_clone_weapon(
         );
     }
 
-    if let Some(vanilla_id) = (0..VANILLA_WEAPON_COUNT).find(|&id|
-        LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name &&
-        LOWERCASE_WEAPON_NAMES.get(id).unwrap() == original_article_name
-    ) {
+    if let Some(vanilla_id) = (0..VANILLA_WEAPON_COUNT).find(|&id| {
+        LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name
+            && LOWERCASE_WEAPON_NAMES.get(id).unwrap() == original_article_name
+    }) {
         panic!(
             "[smashline::cloning] Cannot clone {}_{} onto {}: it already has a vanilla article named {} (Weapon ID {:#x}), whose param_{} lookups would be remapped to the clone",
             original_owner_name,
@@ -358,14 +394,12 @@ pub extern "C" fn smashline_clone_weapon(
     let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
 
     let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
-    let articles = new_articles
-        .entry(owner_id as i32)
-        .or_default();
+    let articles = new_articles.entry(owner_id as i32).or_default();
 
-    if let Some(agent) = new_agents.iter().find(|agent|
-        agent.owner_name == owner_name &&
-        agent.article_name == article_name
-    ) {
+    if let Some(agent) = new_agents
+        .iter()
+        .find(|agent| agent.owner_name == owner_name && agent.article_name == article_name)
+    {
         let weapon_id = agent.article_id;
         let index = articles
             .iter()
@@ -379,33 +413,31 @@ pub extern "C" fn smashline_clone_weapon(
         );
         return CloneWeapon {
             generate_id,
-            weapon_id
+            weapon_id,
         };
     }
 
     let new_weapon_count = new_agents.len();
     let article_id = (VANILLA_WEAPON_COUNT + new_weapon_count) as i32;
-    new_agents.push(
-        NewAgent{
-            article_id,
-            owner_id,
-            article_name_c: std::ffi::CString::new(article_name.as_str()).unwrap(),
-            owner_name_c: std::ffi::CString::new(owner_name.as_str()).unwrap(),
-            original_article_name_c: std::ffi::CString::new(original_article_name).unwrap(),
-            article_name,
-            owner_name,
-            original_article_id,
-            original_owner_id,
-            original_article_name: original_article_name.to_string(),
-            use_original_code
-        }
-    );
+    new_agents.push(NewAgent {
+        article_id,
+        owner_id,
+        article_name_c: std::ffi::CString::new(article_name.as_str()).unwrap(),
+        owner_name_c: std::ffi::CString::new(owner_name.as_str()).unwrap(),
+        original_article_name_c: std::ffi::CString::new(original_article_name).unwrap(),
+        article_name,
+        owner_name,
+        original_article_id,
+        original_owner_id,
+        original_article_name: original_article_name.to_string(),
+        use_original_code,
+    });
 
     articles.push(NewArticle {
         original_owner: original_owner_id as i32,
         original_weapon_id: original_article_id,
         new_weapon_id: article_id,
-        skip_patching: false
+        skip_patching: false,
     });
 
     crate::cloning::weapons::invalidate_article_cache();
@@ -419,7 +451,7 @@ pub extern "C" fn smashline_clone_weapon(
     );
     CloneWeapon {
         generate_id: generate_count + generate_add,
-        weapon_id: article_id
+        weapon_id: article_id,
     }
 }
 
@@ -427,7 +459,7 @@ pub extern "C" fn smashline_clone_weapon(
 pub extern "C" fn smashline_update_weapon_count(
     fighter_id: i32,
     generate_article_id: i32,
-    new_count: i32
+    new_count: i32,
 ) {
     let mut descriptors = crate::cloning::weapons::ARTICLE_DESCRIPTOR_REPLACE.write();
     let descriptor = descriptors
@@ -444,8 +476,12 @@ pub extern "C" fn smashline_update_weapon_count(
 pub extern "C" fn smashline_replace_article_descriptor_func(
     fighter_id: i32,
     generate_article_id: i32,
-    on_init_callback: Option<unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32>,
-    on_fini_callback: Option<unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32>,
+    on_init_callback: Option<
+        unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32,
+    >,
+    on_fini_callback: Option<
+        unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32,
+    >,
 ) {
     let mut descriptors = crate::cloning::weapons::ARTICLE_DESCRIPTOR_REPLACE.write();
     let descriptor = descriptors
@@ -462,18 +498,19 @@ pub extern "C" fn smashline_replace_article_descriptor_func(
 #[no_mangle]
 pub extern "C" fn smashline_whitelist_kirby_copy_article(
     fighter_id: i32,
-    generate_article_id: i32
+    generate_article_id: i32,
 ) {
     let mut copy_whitelist = crate::cloning::weapons::KIRBY_COPY_ARTICLE_WHITELIST.write();
     if let Some(whitelist) = copy_whitelist.get_mut(&fighter_id) {
         if whitelist.contains(&generate_article_id) {
-            println!("Copy Whitelist already contains fighter {:#x} article {:#x}!", fighter_id, generate_article_id);
-        }
-        else {
+            println!(
+                "Copy Whitelist already contains fighter {:#x} article {:#x}!",
+                fighter_id, generate_article_id
+            );
+        } else {
             whitelist.push(generate_article_id);
         }
-    }
-    else {
+    } else {
         copy_whitelist.insert(fighter_id, vec![generate_article_id]);
     }
 
@@ -484,17 +521,17 @@ pub extern "C" fn smashline_whitelist_kirby_copy_article(
 pub extern "C" fn smashline_replace_weapon_vtable(
     weapon_kind: i32,
     vtable_slot: usize,
-    vtable_function: usize
+    vtable_function: usize,
 ) {
-    if vtable_slot >= crate::cloning::weapons::WEAPON_VTABLE_SLOTS {
+    if vtable_slot >= crate::cloning::weapons::vtables::WEAPON_VTABLE_SLOTS {
         println!(
             "[smashline::weapons] Vtable slot {} is out of range! (max {})",
             vtable_slot,
-            crate::cloning::weapons::WEAPON_VTABLE_SLOTS - 1
+            crate::cloning::weapons::vtables::WEAPON_VTABLE_SLOTS - 1
         );
         return;
     }
-    *crate::cloning::weapons::WEAPON_VTABLE_UPDATE
+    *crate::cloning::weapons::vtables::WEAPON_VTABLE_UPDATE
         .write()
         .entry(weapon_kind)
         .or_default()
@@ -507,26 +544,23 @@ pub extern "C" fn smashline_replace_weapon_vtable(
 #[no_mangle]
 pub extern "C" fn smashline_get_original_fighter_vtable(
     fighter_kind: i32,
-    vtable_slot: usize
+    vtable_slot: usize,
 ) -> usize {
-    let vtable = crate::cloning::fighters::get_fighter_vtable_hook(fighter_kind) as *const crate::cloning::fighters::FighterVtable;
-    unsafe {
-        (*vtable).slots[vtable_slot]
-    }
+    let vtable = get_fighter_vtable_hook(fighter_kind) as *const FighterVtable;
+    unsafe { (*vtable).slots[vtable_slot] }
 }
 
 #[no_mangle]
 pub extern "C" fn smashline_get_original_weapon_vtable(
     weapon_kind: i32,
-    vtable_slot: usize
+    vtable_slot: usize,
 ) -> usize {
-    let previous = crate::cloning::weapons::RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed);
-    crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
-    let vtable = crate::cloning::weapons::get_weapon_vtable_hook(weapon_kind) as *const crate::cloning::weapons::WeaponVtable;
-    crate::cloning::weapons::RESOLVE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
-    unsafe {
-        (*vtable).slots[vtable_slot]
-    }
+    let previous = crate::cloning::RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed);
+    crate::cloning::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
+    let vtable = crate::cloning::weapons::vtables::get_weapon_vtable_hook(weapon_kind)
+        as *const WeaponVtable;
+    crate::cloning::RESOLVE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
+    unsafe { (*vtable).slots[vtable_slot] }
 }
 
 #[no_mangle]
@@ -534,13 +568,13 @@ pub extern "C" fn smashline_replace_fighter_vtable_costume(
     fighter_kind: i32,
     costume: Costume,
     vtable_slot: usize,
-    vtable_function: usize
+    vtable_function: usize,
 ) {
-    if vtable_slot >= crate::cloning::fighters::FIGHTER_VTABLE_SLOTS {
+    if vtable_slot >= crate::cloning::fighters::vtables::FIGHTER_VTABLE_SLOTS {
         println!(
             "[smashline::fighters] Vtable slot {} is out of range! (max {})",
             vtable_slot,
-            crate::cloning::fighters::FIGHTER_VTABLE_SLOTS - 1
+            crate::cloning::fighters::vtables::FIGHTER_VTABLE_SLOTS - 1
         );
         return;
     }
@@ -550,48 +584,54 @@ pub extern "C" fn smashline_replace_fighter_vtable_costume(
         mark_costume(Hash40::new(name), costume);
     }
 
-    let mut update_map = crate::cloning::fighters::FIGHTER_VTABLE_UPDATE.write();
+    let mut update_map = crate::cloning::fighters::vtables::FIGHTER_VTABLE_UPDATE.write();
     let updates = update_map.entry(fighter_kind).or_default();
 
-    match updates.iter_mut().find(|update| update.costume.as_slice() == costume.as_slice()) {
+    match updates
+        .iter_mut()
+        .find(|update| update.costume.as_slice() == costume.as_slice())
+    {
         Some(update) => {
             update.slots.insert(vtable_slot, vtable_function);
         }
-        None => updates.push(crate::cloning::fighters::FighterVtableUpdate {
+        None => updates.push(FighterVtableUpdate {
             costume,
             slots: std::collections::BTreeMap::from([(vtable_slot, vtable_function)]),
         }),
     }
 
     drop(update_map);
-    crate::cloning::fighters::invalidate_fighter_vtable_cache();
+    crate::cloning::fighters::invalidate_fighter_cache();
 }
 
 #[no_mangle]
 pub extern "C" fn smashline_replace_fighter_vtable(
     fighter_kind: i32,
     vtable_slot: usize,
-    vtable_function: usize
+    vtable_function: usize,
 ) {
-    smashline_replace_fighter_vtable_costume(fighter_kind, Costume::default(), vtable_slot, vtable_function);
+    smashline_replace_fighter_vtable_costume(
+        fighter_kind,
+        Costume::default(),
+        vtable_slot,
+        vtable_function,
+    );
 }
 
 #[no_mangle]
 pub extern "C" fn smashline_clone_article_descriptor(
     fighter_id: i32,
     original_fighter_id: i32,
-    generate_article_id: i32
+    generate_article_id: i32,
 ) -> CloneWeapon {
     let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
-    let articles = new_articles
-        .entry(fighter_id)
-        .or_default();
+    let articles = new_articles.entry(fighter_id).or_default();
 
     articles.push(NewArticle {
         original_owner: original_fighter_id,
         original_weapon_id: generate_article_id,
         new_weapon_id: -1,
-        skip_patching: true
+        skip_patching: true,
     });
 
     crate::cloning::weapons::invalidate_article_cache();
@@ -600,6 +640,6 @@ pub extern "C" fn smashline_clone_article_descriptor(
     let generate_add = articles.len() as i32;
     CloneWeapon {
         generate_id: generate_count + generate_add,
-        weapon_id: -1
+        weapon_id: -1,
     }
 }
