@@ -15,7 +15,7 @@ use vtables::{vtable, VirtualClass};
 
 use std::ops::{Deref, DerefMut};
 
-use crate::cloning::weapons::{try_get_new_agent, NEW_AGENTS, NEW_ARTICLES};
+use crate::cloning::{fighters::descriptors::NEW_ARTICLES, weapons::{try_get_new_agent, NEW_AGENTS}};
 
 pub static WHITELISTED_PARAMS: RwLock<BTreeMap<i32, Vec<Hash40>>> = RwLock::new(BTreeMap::new());
 

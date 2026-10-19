@@ -9,6 +9,16 @@ pub mod weapons;
 
 pub static RESOLVE_AS_ORIGINAL: AtomicBool = AtomicBool::new(false);
 
+pub fn invalidate_fighter_cache() {
+    fighters::vtables::FIGHTER_VTABLE_CACHE.write().clear();
+}
+
+pub fn invalidate_article_cache() {
+    fighters::descriptors::FIGHTER_DATA_CACHE.write().clear();
+    fighters::descriptors::KIRBY_COPY_DATA_CACHE.write().clear();
+    weapons::vtables::WEAPON_VTABLE_CACHE.write().clear();
+}
+
 #[skyline::hook(offset = 0x6079d0)]
 fn fighter_initialize_object_data(
     fighter: &mut BattleObject,

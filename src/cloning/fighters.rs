@@ -9,6 +9,7 @@ use smashline::{Costume, Hash40};
 
 use crate::create_agent::LOWERCASE_FIGHTER_NAMES;
 
+pub mod descriptors;
 pub mod vtables;
 
 static FIGHTER_CLONES: RwLock<[Option<Hash40>; 8]> = RwLock::new([None; 8]);
@@ -152,10 +153,6 @@ unsafe fn handle_fighter_name(ctx: &mut InlineCtx, dst: usize) {
     }
 }
 
-pub fn invalidate_fighter_cache() {
-    vtables::FIGHTER_VTABLE_CACHE.write().clear();
-}
-
 decl_hooks! {
     install_fighter_name_hooks => handle_fighter_name;
     kirby_copy_fit(0xba448c, 2);
@@ -211,5 +208,6 @@ pub fn install() {
 
     // install_fighter_name_hooks();
 
+    descriptors::install();
     vtables::install();
 }

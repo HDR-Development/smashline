@@ -14,11 +14,11 @@ use smashline::{
 use crate::{
     callbacks::{StatusCallback, StatusCallbackFunction},
     cloning::{
-        fighters::vtables::{get_fighter_vtable_hook, FighterVtable, FighterVtableUpdate},
-        weapons::{
-            vtables::WeaponVtable, ArticleDescriptorReplace, NewAgent, NewArticle,
-            MAX_GENERATE_ARTICLE_IDS, VANILLA_WEAPON_COUNT,
+        fighters::{
+            descriptors::{ArticleDescriptorReplace, NewArticle, MAX_GENERATE_ARTICLE_IDS},
+            vtables::{get_fighter_vtable_hook, FighterVtable, FighterVtableUpdate},
         },
+        weapons::{vtables::WeaponVtable, NewAgent, VANILLA_WEAPON_COUNT},
     },
     create_agent::{
         AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
@@ -393,7 +393,7 @@ pub extern "C" fn smashline_clone_weapon(
 
     let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
 
-    let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
+    let mut new_articles = crate::cloning::fighters::descriptors::NEW_ARTICLES.write();
     let articles = new_articles.entry(owner_id as i32).or_default();
 
     if let Some(agent) = new_agents
@@ -440,7 +440,7 @@ pub extern "C" fn smashline_clone_weapon(
         skip_patching: false,
     });
 
-    crate::cloning::weapons::invalidate_article_cache();
+    crate::cloning::invalidate_article_cache();
 
     let generate_count = MAX_GENERATE_ARTICLE_IDS[owner_id as usize];
     let generate_add = articles.len() as i32;
@@ -461,7 +461,7 @@ pub extern "C" fn smashline_update_weapon_count(
     generate_article_id: i32,
     new_count: i32,
 ) {
-    let mut descriptors = crate::cloning::weapons::ARTICLE_DESCRIPTOR_REPLACE.write();
+    let mut descriptors = crate::cloning::fighters::descriptors::ARTICLE_DESCRIPTOR_REPLACE.write();
     let descriptor = descriptors
         .entry(fighter_id)
         .or_default()
@@ -469,7 +469,7 @@ pub extern "C" fn smashline_update_weapon_count(
         .or_insert(ArticleDescriptorReplace::new());
     descriptor.max_count = Some(new_count);
 
-    crate::cloning::weapons::invalidate_article_cache();
+    crate::cloning::invalidate_article_cache();
 }
 
 #[no_mangle]
@@ -483,7 +483,7 @@ pub extern "C" fn smashline_replace_article_descriptor_func(
         unsafe extern "C" fn(*mut u64, *mut BattleObjectModuleAccessor) -> i32,
     >,
 ) {
-    let mut descriptors = crate::cloning::weapons::ARTICLE_DESCRIPTOR_REPLACE.write();
+    let mut descriptors = crate::cloning::fighters::descriptors::ARTICLE_DESCRIPTOR_REPLACE.write();
     let descriptor = descriptors
         .entry(fighter_id)
         .or_default()
@@ -492,7 +492,7 @@ pub extern "C" fn smashline_replace_article_descriptor_func(
     descriptor.on_init_callback = on_init_callback;
     descriptor.on_fini_callback = on_fini_callback;
 
-    crate::cloning::weapons::invalidate_article_cache();
+    crate::cloning::invalidate_article_cache();
 }
 
 #[no_mangle]
@@ -500,7 +500,7 @@ pub extern "C" fn smashline_whitelist_kirby_copy_article(
     fighter_id: i32,
     generate_article_id: i32,
 ) {
-    let mut copy_whitelist = crate::cloning::weapons::KIRBY_COPY_ARTICLE_WHITELIST.write();
+    let mut copy_whitelist = crate::cloning::fighters::descriptors::KIRBY_COPY_ARTICLE_WHITELIST.write();
     if let Some(whitelist) = copy_whitelist.get_mut(&fighter_id) {
         if whitelist.contains(&generate_article_id) {
             println!(
@@ -514,7 +514,7 @@ pub extern "C" fn smashline_whitelist_kirby_copy_article(
         copy_whitelist.insert(fighter_id, vec![generate_article_id]);
     }
 
-    crate::cloning::weapons::invalidate_article_cache();
+    crate::cloning::invalidate_article_cache();
 }
 
 #[no_mangle]
@@ -538,7 +538,7 @@ pub extern "C" fn smashline_replace_weapon_vtable(
         .entry(vtable_slot)
         .or_default() = vtable_function;
 
-    crate::cloning::weapons::invalidate_article_cache();
+    crate::cloning::invalidate_article_cache();
 }
 
 #[no_mangle]
@@ -601,7 +601,7 @@ pub extern "C" fn smashline_replace_fighter_vtable_costume(
     }
 
     drop(update_map);
-    crate::cloning::fighters::invalidate_fighter_cache();
+    crate::cloning::invalidate_fighter_cache();
 }
 
 #[no_mangle]
@@ -624,7 +624,7 @@ pub extern "C" fn smashline_clone_article_descriptor(
     original_fighter_id: i32,
     generate_article_id: i32,
 ) -> CloneWeapon {
-    let mut new_articles = crate::cloning::weapons::NEW_ARTICLES.write();
+    let mut new_articles = crate::cloning::fighters::descriptors::NEW_ARTICLES.write();
     let articles = new_articles.entry(fighter_id).or_default();
 
     articles.push(NewArticle {
@@ -634,7 +634,7 @@ pub extern "C" fn smashline_clone_article_descriptor(
         skip_patching: true,
     });
 
-    crate::cloning::weapons::invalidate_article_cache();
+    crate::cloning::invalidate_article_cache();
 
     let generate_count = MAX_GENERATE_ARTICLE_IDS[fighter_id as usize];
     let generate_add = articles.len() as i32;
