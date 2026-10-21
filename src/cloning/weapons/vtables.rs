@@ -13,6 +13,7 @@ pub static WEAPON_VTABLE_CACHE: RwLock<BTreeMap<i32, &'static WeaponVtable>> =
 #[repr(C)]
 pub struct WeaponVtable {
     pub vptr: *const usize,
+    padding: [usize; 2],
     pub slots: [usize; WEAPON_VTABLE_SLOTS]
 }
 
@@ -54,6 +55,7 @@ pub fn get_weapon_vtable_hook(kind: i32) -> *const usize {
 
     let patched = Box::leak(Box::new(WeaponVtable {
         vptr: std::ptr::null(),
+        padding: [0; 2],
         slots: new_vtable_slots,
     }));
     patched.vptr = patched.slots.as_ptr();

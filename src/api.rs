@@ -546,7 +546,10 @@ pub extern "C" fn smashline_get_original_fighter_vtable(
     fighter_kind: i32,
     vtable_slot: usize,
 ) -> usize {
+    let previous = crate::cloning::RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed);
+    crate::cloning::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
     let vtable = get_fighter_vtable_hook(fighter_kind) as *const FighterVtable;
+    crate::cloning::RESOLVE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
     unsafe { (*vtable).slots[vtable_slot] }
 }
 
