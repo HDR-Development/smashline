@@ -7,9 +7,11 @@ pub use smashline_macro::*;
 
 mod builder;
 mod vtable_slots;
+mod weapon_modules;
 
 pub use builder::*;
 pub use vtable_slots::*;
+pub use weapon_modules::*;
 
 #[cfg(all(not(feature = "smash-rs"), feature = "skyline_smash"))]
 pub use smash::{
@@ -497,6 +499,17 @@ decl_imports! {
         original_fighter_id: i32,
         generate_article_id: i32
     ) -> CloneWeapon;
+
+    fn smashline_enable_weapon_module(
+        weapon_kind: i32,
+        module_slot: usize
+    );
+
+    fn smashline_set_weapon_module_factory(
+        weapon_kind: i32,
+        module_slot: usize,
+        factory_offset: usize
+    );
 }
 
 pub fn original_acmd(agent: &mut L2CAgentBase, name: Hash40) -> AcmdFunction {
@@ -586,6 +599,22 @@ pub fn whitelist_kirby_copy_article(fighter_id: i32, generate_article_id: i32) {
 
 pub fn replace_weapon_vtable(weapon_kind: i32, vtable_slot: WeaponVtableSlot, vtable_function: usize) {
     smashline_replace_weapon_vtable(weapon_kind, vtable_slot as usize, vtable_function);
+}
+
+/// Makes the game create `module` for every weapon of `weapon_kind` (vanilla or clone), using the
+/// game's own factory for it, instead of the shared do-nothing module such weapons get by default.
+///
+/// Only that kind is affected, unlike patching the factory table, whose rows are shared between
+/// kinds. Call it at plugin load; it takes effect on the next weapon init of that kind.
+pub fn enable_weapon_module(weapon_kind: i32, module: WeaponModule) {
+    smashline_enable_weapon_module(weapon_kind, module as usize);
+}
+
+/// Like [`enable_weapon_module`], but with an explicit factory (`factory(module_accessor)`, given
+/// as a text offset), for the per-kind module variants the game has (e.g. the firehydrant
+/// GroundModule) or your own.
+pub fn set_weapon_module_factory(weapon_kind: i32, module: WeaponModule, factory_offset: usize) {
+    smashline_set_weapon_module_factory(weapon_kind, module as usize, factory_offset);
 }
 
 /// Replaces a fighter vtable entry for every costume of `fighter_kind` that no costume-specific

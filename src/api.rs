@@ -18,7 +18,11 @@ use crate::{
             descriptors::{ArticleDescriptorReplace, NewArticle, MAX_GENERATE_ARTICLE_IDS},
             vtables::{get_fighter_vtable_hook, FighterVtable, FighterVtableUpdate},
         },
-        weapons::{vtables::WeaponVtable, NewAgent, VANILLA_WEAPON_COUNT},
+        weapons::{
+            modules::{WEAPON_MODULE_FACTORIES, WEAPON_MODULE_SLOTS},
+            vtables::WeaponVtable,
+            NewAgent, VANILLA_WEAPON_COUNT,
+        },
     },
     create_agent::{
         AcmdScript, StatusScript, StatusScriptFunction, LOWERCASE_FIGHTER_NAMES,
@@ -645,4 +649,36 @@ pub extern "C" fn smashline_clone_article_descriptor(
         generate_id: generate_count + generate_add,
         weapon_id: -1,
     }
+}
+
+/// Creates the module in row slot `module_slot` for every weapon of `weapon_kind` with the given
+/// factory (text offset), see `cloning::weapons::modules`.
+#[no_mangle]
+pub extern "C" fn smashline_set_weapon_module_factory(
+    weapon_kind: i32,
+    module_slot: usize,
+    factory_offset: usize,
+) {
+    if module_slot >= WEAPON_MODULE_SLOTS {
+        println!(
+            "[smashline::modules] Module slot {} is out of range! (max {})",
+            module_slot,
+            WEAPON_MODULE_SLOTS - 1
+        );
+        return;
+    }
+    crate::cloning::weapons::modules::set_factory(weapon_kind, module_slot, factory_offset);
+}
+
+/// Same as above with the game's own factory for the slot.
+#[no_mangle]
+pub extern "C" fn smashline_enable_weapon_module(weapon_kind: i32, module_slot: usize) {
+    let Some(factory) = WEAPON_MODULE_FACTORIES.get(module_slot).copied().flatten() else {
+        println!(
+            "[smashline::modules] Module slot {} has no factory to enable!",
+            module_slot
+        );
+        return;
+    };
+    crate::cloning::weapons::modules::set_factory(weapon_kind, module_slot, factory);
 }

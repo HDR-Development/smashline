@@ -14,6 +14,7 @@ use crate::{
     }
 };
 
+pub mod modules;
 pub mod vtables;
 
 pub struct NewAgent {
@@ -266,6 +267,7 @@ pub fn install() {
     install_weapon_owner_category_hooks();
 
     vtables::install();
+    modules::install();
 
     skyline::install_hooks!(
         get_weapon_base_kind_hook,
