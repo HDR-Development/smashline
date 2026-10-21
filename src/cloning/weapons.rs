@@ -76,13 +76,6 @@ fn get_static_weapon_data_hook(kind: i32) -> *const u8 {
     call_original!(kind)
 }
 
-#[skyline::hook(offset = 0x33b64e4, inline)]
-unsafe fn weapon_init_factory_kind(ctx: &mut InlineCtx) {
-    if let Some(original) = original_kind_of(ctx.registers[28].x() as i32) {
-        ctx.registers[8].set_x(get_weapon_base_kind(original) as u64);
-    }
-}
-
 #[skyline::hook(offset = 0x33b6b1c, inline)]
 unsafe fn weapon_init_owner_category(ctx: &mut InlineCtx) {
     if let Some(original) = original_kind_of(ctx.registers[21].x() as i32) {
@@ -272,7 +265,6 @@ pub fn install() {
     skyline::install_hooks!(
         get_weapon_base_kind_hook,
         get_static_weapon_data_hook,
-        weapon_init_factory_kind,
         weapon_init_owner_category,
         get_pocket_ui_param,
     );

@@ -18,6 +18,8 @@ use std::collections::BTreeMap;
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
 
+use crate::cloning::weapons::{get_weapon_base_kind, original_kind_of};
+
 pub const WEAPON_MODULE_SLOTS: usize = 29;
 const ROW_SIZE: usize = 0xe8;
 
@@ -101,6 +103,13 @@ unsafe fn patched_row(kind: i32, original_row: *const usize) -> Option<&'static 
     Some(row)
 }
 
+#[skyline::hook(offset = 0x33b64e4, inline)]
+unsafe fn weapon_init_factory_kind(ctx: &mut InlineCtx) {
+    if let Some(original) = original_kind_of(ctx.registers[28].x() as i32) {
+        ctx.registers[8].set_x(get_weapon_base_kind(original) as u64);
+    }
+}
+
 #[skyline::hook(offset = 0x33b64f8, inline)]
 unsafe fn weapon_init_factory_row(ctx: &mut InlineCtx) {
     let kind = ctx.registers[28].w() as i32;
@@ -117,5 +126,8 @@ unsafe fn weapon_init_factory_row(ctx: &mut InlineCtx) {
 }
 
 pub fn install() {
-    skyline::install_hooks!(weapon_init_factory_row);
+    skyline::install_hooks!(
+        weapon_init_factory_kind,
+        weapon_init_factory_row
+    );
 }
