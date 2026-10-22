@@ -554,7 +554,7 @@ pub extern "C" fn smashline_get_original_fighter_vtable(
     crate::cloning::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
     let vtable = get_fighter_vtable_hook(fighter_kind) as *const FighterVtable;
     crate::cloning::RESOLVE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
-    unsafe { (*vtable).slots[vtable_slot] }
+    unsafe { *(*(vtable as *const *const usize)).add(vtable_slot) }
 }
 
 #[no_mangle]
@@ -567,7 +567,7 @@ pub extern "C" fn smashline_get_original_weapon_vtable(
     let vtable = crate::cloning::weapons::vtables::get_weapon_vtable_hook(weapon_kind)
         as *const WeaponVtable;
     crate::cloning::RESOLVE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
-    unsafe { (*vtable).slots[vtable_slot] }
+    unsafe { *(*(vtable as *const *const usize)).add(vtable_slot) }
 }
 
 #[no_mangle]
