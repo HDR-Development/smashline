@@ -397,6 +397,23 @@ pub extern "C" fn smashline_clone_weapon(
 
     let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
 
+    if let Some(agent) = new_agents.iter().find(|agent| {
+        agent.owner_name == owner_name
+            && agent.original_article_name == original_article_name
+            && !(agent.article_name == article_name && agent.original_article_id == original_article_id)
+    }) {
+        panic!(
+            "[smashline::cloning] Cannot clone {}_{} onto {}: it already has article {}_{}, cloned from {}_{}",
+            original_owner_name,
+            original_article_name,
+            owner_name,
+            agent.owner_name,
+            agent.article_name,
+            LOWERCASE_WEAPON_OWNER_NAMES.get(agent.original_article_id as usize).unwrap(),
+            agent.original_article_name
+        );
+    }
+
     let mut new_articles = crate::cloning::fighters::descriptors::NEW_ARTICLES.write();
     let articles = new_articles.entry(owner_id as i32).or_default();
 
