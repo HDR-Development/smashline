@@ -195,7 +195,7 @@ pub enum WeaponVtableSlot {
     Unk32,
     Unk33,
     Unk34,
-    OnWeaponReflection,
+    OnSearch,
     Unk36,
     Unk37,
     Unk38,
@@ -264,4 +264,10 @@ pub enum WeaponVtableSlot {
     Unk101,
     Unk102,
     Unk103,
+}
+
+impl WeaponVtableSlot {
+    #[deprecated(note = "renamed to `WeaponVtableSlot::OnSearch`")]
+    #[allow(non_upper_case_globals)]
+    pub const OnWeaponReflection: Self = Self::OnSearch;
 }
