@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub mod modules;
+pub mod lvd;
 pub mod vtables;
 
 pub struct NewAgent {

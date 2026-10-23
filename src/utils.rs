@@ -353,14 +353,20 @@ fn get_filesystem() -> *mut u64 {
     unsafe { *text.add(0x5332f20).cast::<*mut u64>() }
 }
 
-pub fn load_file(name: impl Into<String>) {
+/// Resolves a full arc path (e.g. `fighter/pacman/model/firehydrant/c00/firehydrant.lvd`) to its
+/// file path index, `None` when the arc has no such file.
+pub fn get_file_path_index(name: &str) -> Option<u32> {
     let mut search_path = 0u32;
     unsafe {
-        get_search_path_index(&mut search_path, format!("{}\0", name.into()).as_ptr());
+        get_search_path_index(&mut search_path, format!("{name}\0").as_ptr());
     }
 
     let file_path = unsafe { get_file_path_from_search_path(search_path) };
-    if file_path != 0xFFFFFF {
+    (file_path != 0xFFFFFF).then_some(file_path)
+}
+
+pub fn load_file(name: impl Into<String>) {
+    if let Some(file_path) = get_file_path_index(&name.into()) {
         unsafe {
             add_to_res_service(get_filesystem(), file_path);
         }
