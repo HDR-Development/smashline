@@ -384,14 +384,20 @@ pub extern "C" fn smashline_clone_weapon(
         LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name
             && LOWERCASE_WEAPON_NAMES.get(id).unwrap() == original_article_name
     }) {
-        panic!(
-            "[smashline::cloning] Cannot clone {}_{} onto {}: it already has a vanilla article named {} (Weapon ID {:#x}), whose param_{} lookups would be remapped to the clone",
+        let details = format!(
+            "Cloning {}_{} onto {}: it already has a vanilla article named {} (Weapon ID {:#x}), whose param_{} lookups will be remapped to the clone",
             original_owner_name,
             original_article_name,
             owner_name,
             original_article_name,
             vanilla_id,
             original_article_name
+        );
+        println!("[smashline::cloning] {}", details);
+        skyline::error::show_error(
+            70,
+            "Smashline cloned a weapon over a vanilla article's params! Please open Details and check your plugin's clone_weapon calls.",
+            details.as_str(),
         );
     }
 
@@ -402,15 +408,22 @@ pub extern "C" fn smashline_clone_weapon(
             && agent.original_article_name == original_article_name
             && !(agent.article_name == article_name && agent.original_article_id == original_article_id)
     }) {
-        panic!(
-            "[smashline::cloning] Cannot clone {}_{} onto {}: it already has article {}_{}, cloned from {}_{}",
+        let details = format!(
+            "Cloning {}_{} onto {}: it already has article {}_{}, cloned from {}_{}, whose param_{} lookups will be remapped to the new clone",
             original_owner_name,
             original_article_name,
             owner_name,
             agent.owner_name,
             agent.article_name,
             LOWERCASE_WEAPON_OWNER_NAMES.get(agent.original_article_id as usize).unwrap(),
-            agent.original_article_name
+            agent.original_article_name,
+            original_article_name
+        );
+        println!("[smashline::cloning] {}", details);
+        skyline::error::show_error(
+            70,
+            "Smashline cloned a weapon over another clone's params! Please open Details and check your plugin's clone_weapon calls.",
+            details.as_str(),
         );
     }
 
