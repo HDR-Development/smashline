@@ -121,6 +121,12 @@ mod utils;
 
 #[skyline::main(name = "smashline")]
 pub fn main() {
+    if utils::env::get_game_version() != semver::Version::new(13, 0, 5) {
+        skyline::error::show_error(999, "Smash Ultimate requires an update.\0", "smashline is incompatible with Smash versions other than 13.0.5\0");
+        // Do not perform any of the hook installation and let the game proceed as normal.
+        return;
+    }
+
     create_agent::install_create_agent_hooks();
     create_agent::install_create_agent_share_hooks();
     create_agent::install_status_create_agent_hooks();
