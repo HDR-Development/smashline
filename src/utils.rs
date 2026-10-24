@@ -372,3 +372,20 @@ pub fn load_file(name: impl Into<String>) {
         }
     }
 }
+
+pub mod env {
+    use semver::Version;
+    use std::{str::FromStr, sync::LazyLock};
+
+    use super::*;
+
+    /// Wrapper function for getting the version string of the game from nnSdk
+    pub fn get_game_version() -> Version {
+        unsafe {
+            // TODO: Implement this in nnsdk-rs
+            let mut version_string = skyline::nn::oe::DisplayVersion { name: [0x00; 16] };
+            skyline::nn::oe::GetDisplayVersion(&mut version_string);
+            Version::from_str(&skyline::from_c_str(version_string.name.as_ptr())).expect("Smash's version should parse as a proper semver.")
+        }
+    }
+}

@@ -380,12 +380,14 @@ pub extern "C" fn smashline_clone_weapon(
         );
     }
 
-    if let Some(vanilla_id) = (0..VANILLA_WEAPON_COUNT).find(|&id| {
-        LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name
-            && LOWERCASE_WEAPON_NAMES.get(id).unwrap() == original_article_name
-    }) {
-        panic!(
-            "[smashline::cloning] Cannot clone {}_{} onto {}: it already has a vanilla article named {} (Weapon ID {:#x}), whose param_{} lookups would be remapped to the clone",
+    if let Some(vanilla_id) = use_original_code.then(|| {
+        (0..VANILLA_WEAPON_COUNT).find(|&id| {
+            LOWERCASE_WEAPON_OWNER_NAMES.get(id).unwrap() == owner_name
+                && LOWERCASE_WEAPON_NAMES.get(id).unwrap() == original_article_name
+        })
+    }).flatten() {
+        let details = format!(
+            "Cloning {}_{} onto {}: it already has a vanilla article named {} (Weapon ID {:#x}), whose param_{} lookups will be remapped to the clone",
             original_owner_name,
             original_article_name,
             owner_name,
@@ -393,24 +395,58 @@ pub extern "C" fn smashline_clone_weapon(
             vanilla_id,
             original_article_name
         );
+        println!("[smashline::cloning] {}", details);
+        skyline::error::show_error(
+            70,
+            "Smashline cloned a weapon over a vanilla article's params! Please open Details and check your plugin's clone_weapon calls.",
+            details.as_str(),
+        );
     }
 
     let mut new_agents = crate::cloning::weapons::NEW_AGENTS.write();
 
     if let Some(agent) = new_agents.iter().find(|agent| {
-        agent.owner_name == owner_name
+        agent.use_original_code
+            && agent.owner_name == owner_name
             && agent.original_article_name == original_article_name
             && !(agent.article_name == article_name && agent.original_article_id == original_article_id)
     }) {
-        panic!(
-            "[smashline::cloning] Cannot clone {}_{} onto {}: it already has article {}_{}, cloned from {}_{}",
-            original_owner_name,
-            original_article_name,
-            owner_name,
-            agent.owner_name,
-            agent.article_name,
-            LOWERCASE_WEAPON_OWNER_NAMES.get(agent.original_article_id as usize).unwrap(),
-            agent.original_article_name
+        let (error, details) = if use_original_code {
+            (
+                "Smashline cloning warning! Please open Details and check your plugin's clone_weapon calls.",
+                format!(
+                    "Cloning {}_{} onto {}: it already has article {}_{}, cloned from {}_{}, whose param_{} lookups will be remapped to the new clone.",
+                    original_owner_name,
+                    original_article_name,
+                    owner_name,
+                    agent.owner_name,
+                    agent.article_name,
+                    LOWERCASE_WEAPON_OWNER_NAMES.get(agent.original_article_id as usize).unwrap(),
+                    agent.original_article_name,
+                    original_article_name
+                )
+            )
+        }
+        else {
+            (
+                "Smashline cloning warning! Please open Details and check your plugin's clone_weapon calls.",
+                format!(
+                    "Cloning {}_{} onto {}: a different article {}_{}, cloned from {}_{}, will take over your param calls until you rewrite them!",
+                    original_owner_name,
+                    original_article_name,
+                    owner_name,
+                    agent.owner_name,
+                    agent.article_name,
+                    LOWERCASE_WEAPON_OWNER_NAMES.get(agent.original_article_id as usize).unwrap(),
+                    agent.original_article_name
+                )
+            )
+        };
+        println!("[smashline::cloning] {}", details);
+        skyline::error::show_error(
+            70,
+            "Smashline cloned a weapon over another clone's params! Please open Details and check your plugin's clone_weapon calls.",
+            details.as_str(),
         );
     }
 
