@@ -1,9 +1,11 @@
-use std::{collections::BTreeMap, sync::atomic::Ordering};
+use std::{collections::BTreeMap, sync::atomic::{AtomicBool, Ordering}};
 
 use locks::RwLock;
 use smashline::{Costume, Hash40};
 
-use crate::{cloning::{RESOLVE_AS_ORIGINAL, fighters::{CURRENT_INIT_COSTUME, NO_COSTUME}}, create_agent::LOWERCASE_FIGHTER_NAMES};
+use crate::{cloning::fighters::{CURRENT_INIT_COSTUME, NO_COSTUME}, create_agent::LOWERCASE_FIGHTER_NAMES};
+
+pub static RESOLVE_FIGHTER_VTABLE_AS_ORIGINAL: AtomicBool = AtomicBool::new(false);
 
 pub const FIGHTER_VTABLE_SLOTS: usize = 147;
 
@@ -35,7 +37,7 @@ pub static FIGHTER_VTABLE_CACHE: RwLock<BTreeMap<(i32, i32), &'static FighterVta
 
 #[skyline::hook(offset = 0x68d530)]
 pub fn get_fighter_vtable_hook(kind: i32) -> *const usize {
-    if RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed) {
+    if RESOLVE_FIGHTER_VTABLE_AS_ORIGINAL.load(Ordering::Relaxed) {
         return call_original!(kind);
     }
     let costume = CURRENT_INIT_COSTUME.load(Ordering::Relaxed);

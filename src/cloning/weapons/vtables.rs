@@ -1,7 +1,9 @@
-use std::{collections::BTreeMap, sync::atomic::Ordering};
+use std::{collections::BTreeMap, sync::atomic::{AtomicBool, Ordering}};
 use locks::RwLock;
 
-use crate::cloning::{RESOLVE_AS_ORIGINAL, weapons::original_kind_of};
+use crate::cloning::weapons::original_kind_of;
+
+pub static RESOLVE_WEAPON_VTABLE_AS_ORIGINAL: AtomicBool = AtomicBool::new(false);
 
 pub static WEAPON_VTABLE_UPDATE: RwLock<BTreeMap<i32, BTreeMap<usize, usize>>> = RwLock::new(BTreeMap::new());
 
@@ -19,7 +21,7 @@ pub struct WeaponVtable {
 
 #[skyline::hook(offset = 0x33bed40)]
 pub fn get_weapon_vtable_hook(kind: i32) -> *const usize {
-    if RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed) {
+    if RESOLVE_WEAPON_VTABLE_AS_ORIGINAL.load(Ordering::Relaxed) {
         let original_kind = original_kind_of(kind).unwrap_or(kind);
         return call_original!(original_kind);
     }

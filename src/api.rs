@@ -8,7 +8,7 @@ use acmd_engine::action::ActionRegistry;
 use rtld::Section;
 use smashline::{
     skyline_smash::app::BattleObjectModuleAccessor, Acmd, AcmdFunction, AgentEntry, Costume,
-    Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
+    CloneWeapon, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
 };
 
 use crate::{
@@ -322,12 +322,6 @@ pub extern "C" fn smashline_reload_script(
     );
 }
 
-#[repr(C)]
-pub struct CloneWeapon {
-    pub generate_id: i32,
-    pub weapon_id: i32,
-}
-
 #[no_mangle]
 pub extern "C" fn smashline_clone_weapon(
     owner_name: StringFFI,
@@ -603,10 +597,11 @@ pub extern "C" fn smashline_get_original_fighter_vtable(
     fighter_kind: i32,
     vtable_slot: usize,
 ) -> usize {
-    let previous = crate::cloning::RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed);
-    crate::cloning::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
+    use crate::cloning::fighters::vtables::RESOLVE_FIGHTER_VTABLE_AS_ORIGINAL;
+    let previous = RESOLVE_FIGHTER_VTABLE_AS_ORIGINAL.load(Ordering::Relaxed);
+    RESOLVE_FIGHTER_VTABLE_AS_ORIGINAL.store(true, Ordering::Relaxed);
     let vtable = get_fighter_vtable_hook(fighter_kind) as *const FighterVtable;
-    crate::cloning::RESOLVE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
+    RESOLVE_FIGHTER_VTABLE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
     unsafe { *(*(vtable as *const *const usize)).add(vtable_slot) }
 }
 
@@ -615,11 +610,12 @@ pub extern "C" fn smashline_get_original_weapon_vtable(
     weapon_kind: i32,
     vtable_slot: usize,
 ) -> usize {
-    let previous = crate::cloning::RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed);
-    crate::cloning::RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
+    use crate::cloning::weapons::vtables::RESOLVE_WEAPON_VTABLE_AS_ORIGINAL;
+    let previous = RESOLVE_WEAPON_VTABLE_AS_ORIGINAL.load(Ordering::Relaxed);
+    RESOLVE_WEAPON_VTABLE_AS_ORIGINAL.store(true, Ordering::Relaxed);
     let vtable = crate::cloning::weapons::vtables::get_weapon_vtable_hook(weapon_kind)
         as *const WeaponVtable;
-    crate::cloning::RESOLVE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
+    RESOLVE_WEAPON_VTABLE_AS_ORIGINAL.store(previous, Ordering::Relaxed);
     unsafe { *(*(vtable as *const *const usize)).add(vtable_slot) }
 }
 

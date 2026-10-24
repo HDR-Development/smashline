@@ -7,8 +7,6 @@ use locks::RwLock;
 use skyline::hooks::InlineCtx;
 use smashline::{skyline_smash::app::BattleObjectModuleAccessor, Hash40};
 
-use crate::cloning::RESOLVE_AS_ORIGINAL;
-
 pub struct NewArticle {
     pub original_owner: i32,
     pub original_weapon_id: i32,
@@ -342,10 +340,6 @@ impl StaticArticleData {
 fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     let original_data: *const StaticFighterData = call_original!(kind);
 
-    if RESOLVE_AS_ORIGINAL.load(Ordering::Relaxed) {
-        return original_data;
-    }
-
     if let Some(cached) = FIGHTER_DATA_CACHE.read().get(&kind) {
         return *cached as *const StaticFighterData;
     }
@@ -358,9 +352,7 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
 
         for new_article in new_articles.iter() {
             println!("[smashline::weapons] Attempting to append article {:#x} to the article table", new_article.new_weapon_id);
-            RESOLVE_AS_ORIGINAL.store(true, Ordering::Relaxed);
             let source_data = call_original!(new_article.original_owner);
-            RESOLVE_AS_ORIGINAL.store(false, Ordering::Relaxed);
 
             unsafe {
                 // bad
