@@ -8,7 +8,7 @@ use acmd_engine::action::ActionRegistry;
 use rtld::Section;
 use smashline::{
     skyline_smash::app::BattleObjectModuleAccessor, Acmd, AcmdFunction, AgentEntry, Costume,
-    CloneWeapon, Hash40, L2CAgentBase, ObjectEvent, Priority, StatusLine, StringFFI,
+    CloneWeapon, Hash40, L2CAgentBase, LvdNodeBinding, ObjectEvent, Priority, StatusLine, StringFFI,
 };
 
 use crate::{
@@ -590,6 +590,49 @@ pub extern "C" fn smashline_replace_weapon_vtable(
         .or_default() = vtable_function;
 
     crate::cloning::invalidate_article_cache();
+}
+
+/// Gives `weapon_kind` the hydrant's (`follow_nodes`) or forge's GroundModule through the module
+/// factory row, with these vertex-to-node bindings. Loading a file into it is the plugin's job, from
+/// its own `WeaponGenerate3` replacement, through `smashline_load_weapon_lvd`.
+#[no_mangle]
+pub extern "C" fn smashline_set_weapon_lvd_nodes(
+    weapon_kind: i32,
+    facing_right: *const LvdNodeBinding,
+    facing_right_len: usize,
+    facing_left: *const LvdNodeBinding,
+    facing_left_len: usize,
+    follow_nodes: bool,
+) {
+    let bindings = |ptr: *const LvdNodeBinding, len: usize| -> &[LvdNodeBinding] {
+        if ptr.is_null() || len == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(ptr, len) }
+        }
+    };
+    let facing_right = bindings(facing_right, facing_right_len);
+    let facing_left = bindings(facing_left, facing_left_len);
+
+    crate::cloning::weapons::lvd::register(
+        weapon_kind,
+        crate::cloning::weapons::lvd::WeaponLvd::new(facing_right, facing_left, follow_nodes),
+    );
+}
+
+/// Loads `<model dir>/c<costume>/<file_name>` (falling back to c00) into `weapon`'s GroundModule:
+/// parse, pin the vertices to the registered nodes, enable. Returns whether a collision now exists.
+#[no_mangle]
+pub extern "C" fn smashline_load_weapon_lvd(weapon: *mut u8, file_name: StringFFI) -> bool {
+    let file_name = file_name.as_str().unwrap();
+    unsafe { crate::cloning::weapons::lvd::load(weapon, file_name) }
+}
+
+/// Re-pins `weapon`'s lvd vertices to their nodes once (for weapons registered without
+/// `follow_nodes`, after they were moved).
+#[no_mangle]
+pub extern "C" fn smashline_refresh_weapon_lvd(weapon: *mut u8) {
+    unsafe { crate::cloning::weapons::lvd::refresh(weapon) }
 }
 
 #[no_mangle]

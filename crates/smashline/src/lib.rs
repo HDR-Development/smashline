@@ -510,6 +510,19 @@ decl_imports! {
         module_slot: usize,
         factory_offset: usize
     );
+
+    fn smashline_set_weapon_lvd_nodes(
+        weapon_kind: i32,
+        facing_right: *const LvdNodeBinding,
+        facing_right_len: usize,
+        facing_left: *const LvdNodeBinding,
+        facing_left_len: usize,
+        follow_nodes: bool
+    );
+
+    fn smashline_load_weapon_lvd(weapon: *mut u8, file_name: StringFFI) -> bool;
+
+    fn smashline_refresh_weapon_lvd(weapon: *mut u8);
 }
 
 pub fn original_acmd(agent: &mut L2CAgentBase, name: Hash40) -> AcmdFunction {
@@ -595,6 +608,96 @@ pub fn add_param_object(fighter: impl Into<String>, object: impl Into<String>) {
 
 pub fn whitelist_kirby_copy_article(fighter_id: i32, generate_article_id: i32) {
     smashline_whitelist_kirby_copy_article(fighter_id, generate_article_id);
+}
+
+/// One lvd collision vertex pinned to a model node. The layout matches the game's own node
+/// descriptor entries, so slices of these are handed to the game as they are.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LvdNodeBinding {
+    /// Index of the vertex inside the lvd's collision shapes (shapes are concatenated in file order).
+    pub vertex: u32,
+    _pad: u32,
+    /// `Hash40` of the model node the vertex follows, e.g. `virtualgrdcol01`.
+    pub node: u64,
+}
+
+impl LvdNodeBinding {
+    pub fn new(vertex: u32, node: Hash40) -> Self {
+        // `Hash40` is a plain u64 under both smash crates, but names its field differently.
+        const _: () = assert!(std::mem::size_of::<Hash40>() == std::mem::size_of::<u64>());
+        Self { vertex, _pad: 0, node: unsafe { std::mem::transmute::<Hash40, u64>(node) } }
+    }
+}
+
+/// Gives `weapon_kind` the lvd-capable GroundModule that Pac-Man's firehydrant and Steve's forge
+/// use, with its collision vertices pinned to model nodes. It is [`set_weapon_module_factory`] for
+/// [`WeaponModule::Ground`] with the hydrant's factory (`follow_nodes`) or the forge's, plus the
+/// bindings; call it at plugin load, it takes effect on the kind's next weapon init.
+///
+/// `facing_right` / `facing_left` are the bindings for the two facing directions (`facing_left`
+/// empty reuses `facing_right`); both vanilla weapons bind their two vertices to `virtualgrdcol01`
+/// and `virtualgrdcol02` with the vertex indices swapped per direction. `follow_nodes` picks the
+/// hydrant's GroundModule, which re-pins every frame as a weapon that moves or rotates needs; a
+/// static weapon takes the forge's and can [`refresh_weapon_lvd`] itself when it is moved.
+///
+/// This only prepares the module. Loading the file is the plugin's job: replace the kind's
+/// [`WeaponVtableSlot::WeaponGenerate3`] with [`replace_weapon_vtable`] and call
+/// [`load_weapon_lvd`] from it, the way the hydrant's own slot 8 does.
+///
+/// A two-vertex line whose ends follow the hydrant's nodes, swapped when the weapon faces left so
+/// vertex 0 stays the left end of the surface:
+///
+/// ```ignore
+/// use smashline::{set_weapon_lvd_nodes, Hash40, LvdNodeBinding};
+///
+/// let col01 = Hash40::new("virtualgrdcol01");
+/// let col02 = Hash40::new("virtualgrdcol02");
+///
+/// // facing right: vertex 1 is on col01, vertex 0 on col02
+/// let facing_right = [LvdNodeBinding::new(1, col01), LvdNodeBinding::new(0, col02)];
+/// // facing left: the same nodes, vertex indices swapped
+/// let facing_left = [LvdNodeBinding::new(0, col01), LvdNodeBinding::new(1, col02)];
+///
+/// // the hydrant tips over, so it re-pins every frame
+/// set_weapon_lvd_nodes(clone.weapon_id, &facing_right, &facing_left, true);
+/// ```
+///
+/// Vertex indices count through the lvd's collision shapes in file order (shape 0's vertices first,
+/// then shape 1's). A static weapon can pass `&[]` for `facing_left` to reuse `facing_right` and
+/// `false` for `follow_nodes`.
+pub fn set_weapon_lvd_nodes(
+    weapon_kind: i32,
+    facing_right: &[LvdNodeBinding],
+    facing_left: &[LvdNodeBinding],
+    follow_nodes: bool,
+) {
+    smashline_set_weapon_lvd_nodes(
+        weapon_kind,
+        facing_right.as_ptr(),
+        facing_right.len(),
+        facing_left.as_ptr(),
+        facing_left.len(),
+        follow_nodes,
+    );
+}
+
+/// Loads `<category>/<owner>/model/<article>/c<costume>/<file_name>` (falling back to `c00`) into
+/// `weapon`'s GroundModule: parses it, pins the vertices to the nodes registered with
+/// [`set_weapon_lvd_nodes`] and enables the collision. `weapon` is the weapon object a
+/// `WeaponGenerate3` replacement receives as its second argument.
+///
+/// The file needs one or two collision shapes and must already be resident (keep it next to the
+/// weapon's model files). Calling it again on a live weapon rebuilds the collision. Returns whether a
+/// collision now exists; the reason is logged otherwise.
+pub fn load_weapon_lvd<T>(weapon: *mut T, file_name: impl Into<String>) -> bool {
+    smashline_load_weapon_lvd(weapon as *mut u8, StringFFI::from_str(file_name))
+}
+
+/// Re-pins `weapon`'s lvd vertices to their nodes once, for weapons registered without
+/// `follow_nodes` after they moved.
+pub fn refresh_weapon_lvd<T>(weapon: *mut T) {
+    smashline_refresh_weapon_lvd(weapon as *mut u8);
 }
 
 pub fn replace_weapon_vtable(weapon_kind: i32, vtable_slot: WeaponVtableSlot, vtable_function: usize) {
