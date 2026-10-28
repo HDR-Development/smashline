@@ -2,7 +2,7 @@
 members = ["crates/*"]
 
 [workspace.package]
-version = "1.6.8"
+version = "2.0.0"
 authors = ["blujay <the.blu.dev@gmail.com>"]
 description = "An object script replacement engine for Super Smash Bros. Ultimate"
 edition = "2021"
@@ -44,6 +44,7 @@ once_cell = "1"
 prc-rs = { version = "1.6.1", features = ["indexmap-std"] }
 resources.path = "crates/resources"
 smash_script = { git = "https://github.com/WuBoytH/smash-script", branch = "development" }
+semver = { version = "1", features = ["serde"] }
 
 # [patch.'https://github.com/WuBoytH/smash-rs']
 # smash-rs = { package = "smash", path = "../smash-rs" }

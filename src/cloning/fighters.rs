@@ -1,8 +1,16 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    collections::BTreeMap,
+    sync::atomic::{AtomicI32, AtomicUsize, Ordering},
+};
 
 use locks::RwLock;
 use skyline::hooks::InlineCtx;
-use smashline::Hash40;
+use smashline::{Costume, Hash40};
+
+use crate::create_agent::LOWERCASE_FIGHTER_NAMES;
+
+pub mod descriptors;
+pub mod vtables;
 
 static FIGHTER_CLONES: RwLock<[Option<Hash40>; 8]> = RwLock::new([None; 8]);
 
@@ -104,6 +112,10 @@ unsafe fn finish_ai(_ctx: &InlineCtx) {
     CURRENT_PLAYER_ID.store(usize::MAX, Ordering::Relaxed);
 }
 
+pub const NO_COSTUME: i32 = -1;
+
+pub static CURRENT_INIT_COSTUME: AtomicI32 = AtomicI32::new(NO_COSTUME);
+
 macro_rules! decl_hooks {
     ($install_fn:ident => $func:expr; $($name:ident($offset:expr, $dst:expr));*) => {
         $(
@@ -185,14 +197,17 @@ decl_hooks! {
 }
 
 pub fn install() {
-    skyline::patching::Patch::in_text(0x2310ec0).nop().unwrap();
-    skyline::install_hooks!(
-        set_current_player_id,
-        lookup_fighter_kind_hash,
-        update_selected_fighter,
-        initialize_ai,
-        finish_ai
-    );
+    // skyline::patching::Patch::in_text(0x2310ec0).nop().unwrap();
+    // skyline::install_hooks!(
+    //     set_current_player_id,
+    //     lookup_fighter_kind_hash,
+    //     update_selected_fighter,
+    //     initialize_ai,
+    //     finish_ai
+    // );
 
-    install_fighter_name_hooks();
+    // install_fighter_name_hooks();
+
+    descriptors::install();
+    vtables::install();
 }
