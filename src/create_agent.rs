@@ -225,14 +225,14 @@ impl AcmdScripts {
 fn check_installed_script(acmd_map: &mut AcmdScriptSet, name: Hash40, category: Acmd, script: AcmdScript) -> Option<AcmdScript> {
     if let Some((_, script_old)) = acmd_map.get_key_value(&name) {
         if script_old.priority < script.priority {
-            println!("[smashline] Script {:#x} of {} {} replaced by {}", name.0, category, script_old.priority, script.priority);
+            println!("[smashline::create_agent] Script {:#x} of {} {} replaced by {}", name.0, category, script_old.priority, script.priority);
             acmd_map.insert(name, script)
         }
         else {
             if script_old.priority == script.priority {
-                println!("[smashline] Script {:#x} of {} already exists with {}! Check for duplicates!", name.0, category, script_old.priority);
+                println!("[smashline::create_agent] Script {:#x} of {} already exists with {}! Check for duplicates!", name.0, category, script_old.priority);
             } else {
-                println!("[smashline] Script {:#x} of {} with {} will be bypassed. Already installed with {}.", name.0, category, script.priority, script_old.priority);
+                println!("[smashline::create_agent] Script {:#x} of {} with {} will be bypassed. Already installed with {}.", name.0, category, script.priority, script_old.priority);
             }
             None
         }

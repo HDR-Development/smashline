@@ -75,7 +75,7 @@ pub fn get_fighter_vtable_hook(kind: i32) -> *const usize {
         return original_vtable;
     }
     println!(
-        "[smashline::fighters] Replacing vtable functions for Fighter Kind {:#x} costume {}",
+        "[smashline::fighters::vtables] Replacing vtable functions for Fighter Kind {:#x} costume {}",
         kind,
         costume
     );
@@ -87,7 +87,7 @@ pub fn get_fighter_vtable_hook(kind: i32) -> *const usize {
 
     for (index, func) in merged.iter() {
         println!(
-            "[smashline::fighters] Replacing {:#x} Vtable Entry {} with {:#x}",
+            "[smashline::fighters::vtables] Replacing {:#x} Vtable Entry {} with {:#x}",
             kind,
             *index,
             *func

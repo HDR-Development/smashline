@@ -33,10 +33,10 @@ pub fn get_weapon_vtable_hook(kind: i32) -> *const usize {
 
     let weapon_vtable_update = WEAPON_VTABLE_UPDATE.read();
     let Some(vtable_update) = weapon_vtable_update.get(&kind) else {
-        println!("[smashline::weapons] Weapon Kind {:#x} has no vtable functions to replace!", kind);
+        println!("[smashline::weapons::vtables] Weapon Kind {:#x} has no vtable functions to replace!", kind);
         return original_vtable;
     };
-    println!("[smashline::weapons] Replacing vtable functions for Weapon Kind {:#x}", kind);
+    println!("[smashline::weapons::vtables] Replacing vtable functions for Weapon Kind {:#x}", kind);
 
     let vptr = unsafe { *(original_vtable as *const *const usize) };
     let original_slots = unsafe { std::slice::from_raw_parts(vptr, WEAPON_VTABLE_SLOTS) };
@@ -47,7 +47,7 @@ pub fn get_weapon_vtable_hook(kind: i32) -> *const usize {
 
     for (index, func) in vtable_update.iter() {
         println!(
-            "[smashline::weapons] Replacing {:#x} Vtable Entry {} with {:#x}",
+            "[smashline::weapons::vtables] Replacing {:#x} Vtable Entry {} with {:#x}",
             kind,
             *index,
             *func

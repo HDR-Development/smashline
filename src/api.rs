@@ -332,7 +332,7 @@ pub extern "C" fn smashline_clone_weapon(
     let owner_name = owner_name.as_str().unwrap().to_string();
     let article_name = article_name.as_str().unwrap().to_string();
     println!(
-        "[smashline::cloning] New weapon {}_{} is being cloned!",
+        "[smashline::api] New weapon {}_{} is being cloned!",
         owner_name, article_name
     );
 
@@ -341,7 +341,7 @@ pub extern "C" fn smashline_clone_weapon(
         .position(|name| name == owner_name)
         .unwrap() as i32;
     println!(
-        "[smashline::cloning] Owner ID has been found: {:#x}",
+        "[smashline::api] Owner ID has been found: {:#x}",
         owner_id
     );
 
@@ -358,7 +358,7 @@ pub extern "C" fn smashline_clone_weapon(
         .position(|name| name == original_owner_name)
         .unwrap() as i32;
     println!(
-        "[smashline::cloning] The original article being cloned is {}_{}",
+        "[smashline::api] The original article being cloned is {}_{}",
         original_owner_name, original_article_name
     );
 
@@ -367,7 +367,7 @@ pub extern "C" fn smashline_clone_weapon(
             && LOWERCASE_WEAPON_NAMES.get(id).unwrap() == article_name
     }) {
         panic!(
-            "[smashline::cloning] Cannot clone {}_{}: a vanilla article with this owner/name already exists (Weapon ID {:#x})",
+            "[smashline::api] Cannot clone {}_{}: a vanilla article with this owner/name already exists (Weapon ID {:#x})",
             owner_name,
             article_name,
             vanilla_id
@@ -389,7 +389,7 @@ pub extern "C" fn smashline_clone_weapon(
             vanilla_id,
             original_article_name
         );
-        println!("[smashline::cloning] {}", details);
+        println!("[smashline::api] {}", details);
         skyline::error::show_error(
             70,
             "Smashline cloned a weapon over a vanilla article's params! Please open Details and check your plugin's clone_weapon calls.",
@@ -436,7 +436,7 @@ pub extern "C" fn smashline_clone_weapon(
                 )
             )
         };
-        println!("[smashline::cloning] {}", details);
+        println!("[smashline::api] {}", details);
         skyline::error::show_error(
             70,
             "Smashline cloned a weapon over another clone's params! Please open Details and check your plugin's clone_weapon calls.",
@@ -458,7 +458,7 @@ pub extern "C" fn smashline_clone_weapon(
             .unwrap();
         let generate_id = MAX_GENERATE_ARTICLE_IDS[owner_id as usize] + index as i32 + 1;
         println!(
-            "[smashline::cloning] This article is already cloned on this fighter! Weapon ID {:#x}, Generate Id {}",
+            "[smashline::api] This article is already cloned on this fighter! Weapon ID {:#x}, Generate Id {}",
             weapon_id,
             generate_id
         );
@@ -496,7 +496,7 @@ pub extern "C" fn smashline_clone_weapon(
     let generate_count = MAX_GENERATE_ARTICLE_IDS[owner_id as usize];
     let generate_add = articles.len() as i32;
     println!(
-        "[smashline::cloning] Article has been cloned with Weapon ID {:#x} and Generate Id {}",
+        "[smashline::api] Article has been cloned with Weapon ID {:#x} and Generate Id {}",
         article_id,
         generate_count + generate_add
     );
@@ -576,7 +576,7 @@ pub extern "C" fn smashline_replace_weapon_vtable(
 ) {
     if vtable_slot >= crate::cloning::weapons::vtables::WEAPON_VTABLE_SLOTS {
         println!(
-            "[smashline::weapons] Vtable slot {} is out of range! (max {})",
+            "[smashline::api] Vtable slot {} is out of range! (max {})",
             vtable_slot,
             crate::cloning::weapons::vtables::WEAPON_VTABLE_SLOTS - 1
         );
@@ -671,7 +671,7 @@ pub extern "C" fn smashline_replace_fighter_vtable_costume(
 ) {
     if vtable_slot >= crate::cloning::fighters::vtables::FIGHTER_VTABLE_SLOTS {
         println!(
-            "[smashline::fighters] Vtable slot {} is out of range! (max {})",
+            "[smashline::api] Vtable slot {} is out of range! (max {})",
             vtable_slot,
             crate::cloning::fighters::vtables::FIGHTER_VTABLE_SLOTS - 1
         );
@@ -753,7 +753,7 @@ pub extern "C" fn smashline_set_weapon_module_factory(
 ) {
     if module_slot >= WEAPON_MODULE_SLOTS {
         println!(
-            "[smashline::modules] Module slot {} is out of range! (max {})",
+            "[smashline::api] Module slot {} is out of range! (max {})",
             module_slot,
             WEAPON_MODULE_SLOTS - 1
         );
@@ -767,7 +767,7 @@ pub extern "C" fn smashline_set_weapon_module_factory(
 pub extern "C" fn smashline_enable_weapon_module(weapon_kind: i32, module_slot: usize) {
     let Some(factory) = WEAPON_MODULE_FACTORIES.get(module_slot).copied().flatten() else {
         println!(
-            "[smashline::modules] Module slot {} has no factory to enable!",
+            "[smashline::api] Module slot {} has no factory to enable!",
             module_slot
         );
         return;

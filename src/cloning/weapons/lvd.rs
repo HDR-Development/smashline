@@ -116,7 +116,7 @@ impl WeaponLvd {
         let count = facing_right.len().min(facing_left.len());
         if facing_right.len() != facing_left.len() {
             println!(
-                "[smashline::lvd] facing-right and facing-left bindings differ in length, using the first {}",
+                "[smashline::weapons::lvd] facing-right and facing-left bindings differ in length, using the first {}",
                 count
             );
         }
@@ -148,7 +148,7 @@ pub static WEAPON_LVDS: RwLock<BTreeMap<i32, WeaponLvd>> = RwLock::new(BTreeMap:
 /// remembers the node bindings for [`load`]. Takes effect on the kind's next weapon init.
 pub fn register(weapon_kind: i32, lvd: WeaponLvd) {
     println!(
-        "[smashline::lvd] Weapon Kind {:#x} gets an lvd GroundModule ({} node bindings, follow nodes: {})",
+        "[smashline::weapons::lvd] Weapon Kind {:#x} gets an lvd GroundModule ({} node bindings, follow nodes: {})",
         weapon_kind,
         lvd.descriptor.count,
         lvd.follow_nodes
@@ -172,7 +172,7 @@ unsafe fn lvd_ground_module(weapon: *mut u8, lvd: &WeaponLvd) -> Option<*mut u8>
     let module = *(boma.add(BOMA_GROUND_MODULE) as *const *mut u8);
     if !is_lvd_ground_module(module) {
         println!(
-            "[smashline::lvd] Weapon Kind {:#x} has no lvd-capable GroundModule, register its nodes before the weapon is created",
+            "[smashline::weapons::lvd] Weapon Kind {:#x} has no lvd-capable GroundModule, register its nodes before the weapon is created",
             *(weapon.add(WEAPON_KIND) as *const i32)
         );
         return None;
@@ -203,7 +203,7 @@ pub unsafe fn load(weapon: *mut u8, file_name: &str) -> bool {
     let kind = *(weapon.add(WEAPON_KIND) as *const i32);
     let lvds = WEAPON_LVDS.read();
     let Some(lvd) = lvds.get(&kind) else {
-        println!("[smashline::lvd] Weapon Kind {:#x} has no registered lvd nodes", kind);
+        println!("[smashline::weapons::lvd] Weapon Kind {:#x} has no registered lvd nodes", kind);
         return false;
     };
     let Some(module) = lvd_ground_module(weapon, lvd) else {
@@ -213,7 +213,7 @@ pub unsafe fn load(weapon: *mut u8, file_name: &str) -> bool {
     let costume = *weapon.add(WEAPON_COSTUME);
     let Some(file_index) = lvd_file_path_index(kind, costume, file_name) else {
         println!(
-            "[smashline::lvd] {} not found for Weapon Kind {:#x} (costume {})",
+            "[smashline::weapons::lvd] {} not found for Weapon Kind {:#x} (costume {})",
             file_name, kind, costume
         );
         return false;
@@ -230,7 +230,7 @@ pub unsafe fn load(weapon: *mut u8, file_name: &str) -> bool {
     ground_module_apply_lvd(module);
     if *(module.add(GM_COLLISIONS) as *const usize) == 0 {
         println!(
-            "[smashline::lvd] {} produced no collision for Weapon Kind {:#x} (it needs one or two collision shapes)",
+            "[smashline::weapons::lvd] {} produced no collision for Weapon Kind {:#x} (it needs one or two collision shapes)",
             file_name, kind
         );
         return false;

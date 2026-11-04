@@ -351,14 +351,14 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
     if let Some(new_articles) = NEW_ARTICLES.read().get(&kind) {
 
         for new_article in new_articles.iter() {
-            println!("[smashline::weapons] Attempting to append article {:#x} to the article table", new_article.new_weapon_id);
+            println!("[smashline::fighters::descriptors] Attempting to append article {:#x} to the article table", new_article.new_weapon_id);
             let source_data = call_original!(new_article.original_owner);
 
             unsafe {
                 // bad
                 if new_article.skip_patching {
                     println!(
-                        "[smashline::weapons] Cloning ArticleDescriptor index {} directly from kind {:#x}",
+                        "[smashline::fighters::descriptors] Cloning ArticleDescriptor index {} directly from kind {:#x}",
                         new_article.original_weapon_id,
                         new_article.original_owner
                     );
@@ -372,7 +372,7 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
                         panic!("Failed to append article table");
                     };
                     println!(
-                        "[smashline::weapons] Success"
+                        "[smashline::fighters::descriptors] Success!"
                     );
                     article.weapon_id = new_article.new_weapon_id;
 
@@ -386,12 +386,29 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
         for (index, article) in new_descriptors.iter_mut().enumerate() {
             if let Some(descriptor) = descriptors.get(&(index as i32)) {
                 if let Some(new_count) = descriptor.max_count {
+                    println!(
+                        "[smashline::fighters::descriptors] Updating max weapon count for fighter {:#x}, generate id {:#x}!",
+                        kind,
+                        index
+                    );
                     article.max_count = new_count;
                 }
                 if let Some(init_callback) = descriptor.on_init_callback {
+                    println!(
+                        "[smashline::fighters::descriptors] Updating init callback for fighter {:#x}, generate id {:#x} with fn ptr {:#x}!",
+                        kind,
+                        index,
+                        init_callback as *const () as usize
+                    );
                     article.on_init_callback = init_callback;
                 }
                 if let Some(fini_callback) = descriptor.on_fini_callback {
+                    println!(
+                        "[smashline::fighters::descriptors] Updating init callback for fighter {:#x}, generate id {:#x} with fn ptr {:#x}!",
+                        kind,
+                        index,
+                        fini_callback as *const () as usize
+                    );
                     article.on_fini_callback = fini_callback;
                 }
             }
@@ -406,7 +423,7 @@ fn get_static_fighter_data(kind: i32) -> *const StaticFighterData {
         let is_item = article.extra & 1 != 0;
         if !is_item && unlimited_item_before {
             println!(
-                "[smashline::weapons] Fighter {:#x}: weapon article {} (kind {:#x}) comes after an item article with an unlimited count; its pool slots will overlap another article's",
+                "[smashline::fighters::descriptors] Fighter {:#x}: weapon article {} (kind {:#x}) comes after an item article with an unlimited count; its pool slots will overlap another article's",
                 kind,
                 index,
                 article.weapon_id

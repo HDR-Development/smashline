@@ -263,7 +263,7 @@ fn load_fighter_code_module_hook(loader: *mut u8, kind: i32) -> *mut u8 {
 
     if kind >= 0 {
         for dependency in crate::cloning::weapons::code_dependencies_of(kind) {
-            println!("[smashline::modules] Fighter {:#x} borrows code from fighter {:#x}, loading its module", kind, dependency);
+            println!("[smashline::utils] Fighter {:#x} borrows code from fighter {:#x}, loading its module", kind, dependency);
             load_fighter_module(dependency);
         }
     }
@@ -291,7 +291,7 @@ fn dynamic_module_manager_unload_hook(manager: *mut u64, name: &Hash40) -> u64 {
             continue;
         }
         for dependency in crate::cloning::weapons::code_dependencies_of(owner) {
-            println!("[smashline::modules] Fighter {:#x} unloaded, releasing borrowed module of fighter {:#x}", owner, dependency);
+            println!("[smashline::utils] Fighter {:#x} unloaded, releasing borrowed module of fighter {:#x}", owner, dependency);
             unload_fighter_module(dependency);
         }
         break;

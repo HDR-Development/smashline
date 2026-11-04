@@ -67,7 +67,7 @@ static MODULE_CACHE: RwLock<BTreeMap<i32, &'static [usize; WEAPON_MODULE_SLOTS]>
 
 pub fn set_factory(weapon_kind: i32, slot: usize, factory_offset: usize) {
     println!(
-        "[smashline::modules] Weapon Kind {:#x} gets module slot {} from factory {:#x}",
+        "[smashline::weapons::modules] Weapon Kind {:#x} gets module slot {} from factory {:#x}",
         weapon_kind,
         slot,
         factory_offset

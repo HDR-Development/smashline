@@ -35,14 +35,14 @@ impl DevelopmentPlugin {
         let path = PathBuf::from(path);
         let file_path = path.as_path();
         if !file_path.exists() {
-            println!("[smashline::loader] Development plugin file not found");
+            println!("[smashline::runtime_reload] Development plugin file not found");
             return None;
         }
 
         let nro_image = match std::fs::read(file_path) {
             Ok(data) => data,
             Err(_) => {
-                println!("[smashline::loader] Failed to read development plugin");
+                println!("[smashline::runtime_reload] Failed to read development plugin");
                 return None;
             }
         };
@@ -59,7 +59,7 @@ impl DevelopmentPlugin {
         let mut bss_size = 0u64;
         let rc = nn::ro::GetBufferSize(&mut bss_size, nro_image);
         if rc != 0 {
-            println!("[smashline::loader] Failed to read buffer size from development plugin ({:#x}). Is it a valid NRO?", rc);
+            println!("[smashline::runtime_reload] Failed to read buffer size from development plugin ({:#x}). Is it a valid NRO?", rc);
             libc::free(nro_image as *mut libc::c_void);
             return None;
         }
@@ -94,12 +94,12 @@ impl DevelopmentPlugin {
         let mut nrr_info = MaybeUninit::uninit();
         let rc = ro::RegisterModuleInfo(nrr_info.as_mut_ptr(), nrr_image as _);
         if rc != 0 {
-            println!("[smashline::loader] Failed to register NRR ({:#x})", rc);
+            println!("[smashline::runtime_reload] Failed to register NRR ({:#x})", rc);
             libc::free(nro_image as _);
             libc::free(nrr_image as _);
             return None;
         } else {
-            println!("[smashline::loader] Loading development plugin...");
+            println!("[smashline::runtime_reload] Loading development plugin...");
         }
         let nrr_info = nrr_info.assume_init();
 
@@ -113,10 +113,10 @@ impl DevelopmentPlugin {
             ro::BindFlag_BindFlag_Now as i32,
         );
         if rc == 0 {
-            println!("[smashline::loader] Successfuly loaded development plugin in range ({:#x} - {:#x})", nro_image as u64, nro_image_size + nro_image as usize);
+            println!("[smashline::runtime_reload] Successfuly loaded development plugin in range ({:#x} - {:#x})", nro_image as u64, nro_image_size + nro_image as usize);
         } else {
             println!(
-                "[smashline::loader] Failed to load development plugin ({:#x})",
+                "[smashline::runtime_reload] Failed to load development plugin ({:#x})",
                 rc
             );
         }
@@ -162,11 +162,11 @@ impl DevelopmentPlugin {
         );
 
         if rc != 0 || uninstall_fn == 0 {
-            println!("[smashline::loader] Development plugin does not export 'smashline_uninstall', continuing with default uninstallation.");
+            println!("[smashline::runtime_reload] Development plugin does not export 'smashline_uninstall', continuing with default uninstallation.");
         } else {
             let callable: fn() = std::mem::transmute(uninstall_fn);
             callable();
-            println!("[smashline::loader] Development plugin's uninstall routine called, continuing with default uninstallation.");
+            println!("[smashline::runtime_reload] Development plugin's uninstall routine called, continuing with default uninstallation.");
         }
 
         let mem_info = rtld::nx::query_memory((*self.nro_module.ModuleObject).module_base);
@@ -176,7 +176,7 @@ impl DevelopmentPlugin {
             mem_info.addr as usize + mem_info.size as usize,
         );
 
-        println!("[smashline::loader] Unloading the development plugin...");
+        println!("[smashline::runtime_reload] Unloading the development plugin...");
         ro::UnloadModule(&mut self.nro_module);
         UnregisterModuleInfo(&mut self.nrr_info);
     }
