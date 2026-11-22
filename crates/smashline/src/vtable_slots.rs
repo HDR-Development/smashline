@@ -45,7 +45,7 @@ pub enum FighterVtableSlot {
     Unk42,
     OnStatusChange2,
     Unk44,
-    SecondSituationCallback,
+    OnSituationChange2,
     OnLinkEvent,
     Unk47,
     OnSearch,
@@ -153,9 +153,13 @@ impl FighterVtableSlot {
     #[allow(non_upper_case_globals)]
     pub const Unk43: Self = Self::OnStatusChange2;
 
-    #[deprecated(note = "renamed to `FighterVtableSlot::OnStatusChange3`")]
+    #[deprecated(note = "renamed to `FighterVtableSlot::CheckCanTransitionStatus`")]
     #[allow(non_upper_case_globals)]
     pub const OnStatusTransition: Self = Self::CheckCanTransitionStatus;
+
+    #[deprecated(note = "renamed to `FighterVtableSlot::OnSituationChange2`")]
+    #[allow(non_upper_case_globals)]
+    pub const SecondSituationCallback: Self = Self::OnSituationChange2;
 }
 
 #[repr(usize)]
